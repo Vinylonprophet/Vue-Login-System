@@ -88,6 +88,7 @@ export interface EvaluationResult {
   weights: number[];
   fitnessHistory: number[][];
   errors: number[];
+  selectedIndicators?: string[];
   evaluation: {
     name: string;
     group: string;
@@ -339,7 +340,9 @@ export const pythonMLApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ips })
-    }).then(res => res.json()),
+    }).then(res => res.json()).then(data => {
+      return data.error ? { success: false, error: data.error } : { success: true, data };
+    }),
 
   // SHAP模型解释
   shapExplain: (ips: IP[]) => 
@@ -347,7 +350,9 @@ export const pythonMLApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ips })
-    }).then(res => res.json()),
+    }).then(res => res.json()).then(data => {
+      return data.error ? { success: false, error: data.error } : { success: true, data };
+    }),
 
   // PCA降维分析
   pcaAnalysis: (ips: IP[], nComponents: number = 2) => 
@@ -355,7 +360,9 @@ export const pythonMLApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ips, n_components: nComponents })
-    }).then(res => res.json()),
+    }).then(res => res.json()).then(data => {
+      return data.error ? { success: false, error: data.error } : { success: true, ...data };
+    }),
 
   // 高级聚类分析
   advancedClustering: (ips: IP[], nClusters: number = 2, usePCA: boolean = true) => 
@@ -363,7 +370,9 @@ export const pythonMLApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ips, n_clusters: nClusters, use_pca: usePCA })
-    }).then(res => res.json()),
+    }).then(res => res.json()).then(data => {
+      return data.error ? { success: false, error: data.error } : { success: true, data };
+    }),
 
   // 生成高级可视化图表
   generateAdvancedPlot: (plotType: string, plotData: any) => 
@@ -371,11 +380,15 @@ export const pythonMLApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plot_type: plotType, data: plotData })
-    }).then(res => res.json()),
+    }).then(res => res.json()).then(data => {
+      return data.error ? { success: false, error: data.error } : { success: true, ...data };
+    }),
 
   // 获取每日体育动态
   getDailySportsNews: () => 
-    fetch(`${PYTHON_ML_API_BASE}/sports-news/daily`).then(res => res.json()),
+    fetch(`${PYTHON_ML_API_BASE}/sports-news/daily`).then(res => res.json()).then(data => {
+      return data.error ? { success: false, error: data.error } : { success: true, data };
+    }),
 
   // 健康检查
   healthCheck: () => 

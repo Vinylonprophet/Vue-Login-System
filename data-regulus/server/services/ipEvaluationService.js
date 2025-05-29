@@ -98,12 +98,32 @@ class IPEvaluationService {
         // 获取当前选择的指标
         const currentIndicators = selectedIndicators || this.allThird;
         
-        // 提取数据矩阵
+        // 如果使用了筛选指标，需要从完整数据中提取对应位置的值
         const data = ips.map(ip => {
-            if (currentIndicators.length !== ip.indicators.length) {
-                throw new Error('指标数量不匹配');
+            if (selectedIndicators && selectedIndicators.length > 0) {
+                // 筛选模式：从完整的32个指标中提取选中的指标
+                if (ip.indicators.length !== this.allThird.length) {
+                    throw new Error(`IP数据格式错误：期望${this.allThird.length}个指标，实际${ip.indicators.length}个`);
+                }
+                
+                // 根据选中的指标名称找到对应的索引位置
+                const selectedIndices = selectedIndicators.map(indicator => {
+                    const index = this.allThird.indexOf(indicator);
+                    if (index === -1) {
+                        throw new Error(`未找到指标: ${indicator}`);
+                    }
+                    return index;
+                });
+                
+                // 提取选中指标对应的数值
+                return selectedIndices.map(index => ip.indicators[index]);
+            } else {
+                // 全量模式：使用所有指标
+                if (ip.indicators.length !== this.allThird.length) {
+                    throw new Error(`IP数据格式错误：期望${this.allThird.length}个指标，实际${ip.indicators.length}个`);
             }
             return ip.indicators;
+            }
         });
 
         // 计算AHP权重（使用单位矩阵作为默认判断矩阵）
@@ -132,6 +152,7 @@ class IPEvaluationService {
             weights,
             fitnessHistory,
             errors,
+            selectedIndicators: currentIndicators, // 添加使用的指标信息
             evaluation: ips.map((ip, idx) => ({
                 name: ip.name,
                 group: ip.group,

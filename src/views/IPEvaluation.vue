@@ -2,19 +2,111 @@
   <div class="ip-evaluation-container">
     <!-- 页面标题 -->
     <div class="header">
-      <h1>少数民族民俗体育IP数据浏览系统</h1>
+      <div class="header-top">
+        <h1>少数民族民俗体育IP数据浏览系统</h1>
+        <div class="header-actions">
+          <button @click="toggleFilterPanel" class="header-btn filter-btn">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M3 12l2-2v-2a7 7 0 1 1 14 0v2l2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6z"/>
+              <path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/>
+            </svg>
+            <span>筛选</span>
+          </button>
+          <button @click="toggleDataEntry" class="header-btn entry-btn">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 2v6h6"/>
+              <path d="M16 13H8"/>
+              <path d="M16 17H8"/>
+              <path d="M10 9H8"/>
+            </svg>
+            <span>数据录入</span>
+          </button>
+        </div>
+      </div>
       <div class="stats-bar">
-        <div class="stat-item">
-          <span class="stat-label">总IP数量:</span>
-          <span class="stat-value">{{ statistics.totalIPs }}</span>
+        <div class="stats-container">
+          <div class="stat-item">
+            <div class="stat-icon">📊</div>
+            <div class="stat-content">
+              <span class="stat-label">总IP数量</span>
+              <span class="stat-value">{{ statistics.totalIPs }}</span>
+            </div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-icon">🏷️</div>
+            <div class="stat-content">
+              <span class="stat-label">组别数量</span>
+              <span class="stat-value">{{ statistics.totalGroups }}</span>
+            </div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-icon">📈</div>
+            <div class="stat-content">
+              <span class="stat-label">分析次数</span>
+              <span class="stat-value">{{ statistics.totalEvaluations }}</span>
+            </div>
+          </div>
         </div>
-        <div class="stat-item">
-          <span class="stat-label">组别数量:</span>
-          <span class="stat-value">{{ statistics.totalGroups }}</span>
+        <div class="stats-actions">
+          <div class="quick-stats">
+            <span class="update-time">更新于 {{ new Date().toLocaleTimeString() }}</span>
+          </div>
         </div>
-        <div class="stat-item">
-          <span class="stat-label">分析次数:</span>
-          <span class="stat-value">{{ statistics.totalEvaluations }}</span>
+      </div>
+
+      <!-- 筛选面板 -->
+      <div class="filter-section" v-show="showFilterPanel">
+        <h3>筛选条件</h3>
+        
+        <!-- 一级指标 -->
+        <div class="indicator-group">
+          <h4>一级指标</h4>
+          <div class="checkbox-group">
+            <label v-for="indicator in indicatorStructure.firstLevel" :key="indicator" class="checkbox-label">
+              <input 
+                type="checkbox" 
+                v-model="selectedFirstLevel"
+                :value="indicator"
+                @change="updateFilteredIndicators"
+              />
+              {{ indicator }}
+            </label>
+          </div>
+        </div>
+
+        <!-- 二级指标 -->
+        <div class="indicator-group">
+          <h4>二级指标</h4>
+          <div class="checkbox-group">
+            <label v-for="indicator in indicatorStructure.secondLevel" :key="indicator" class="checkbox-label">
+              <input 
+                type="checkbox" 
+                v-model="selectedSecondLevel"
+                :value="indicator"
+                @change="updateFilteredIndicators"
+              />
+              {{ indicator }}
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 数据录入面板 -->
+      <div class="input-section" v-show="showDataEntryPanel">
+        <h3>数据输入（三级指标）</h3>
+        <div class="indicator-inputs">
+          <div v-for="indicator in filteredThirdIndicators" :key="indicator" class="input-group">
+            <label>{{ indicator }}</label>
+            <input 
+              type="number" 
+              v-model.number="indicatorValues[indicator]"
+              step="0.1"
+              min="0"
+              max="100"
+              placeholder="请输入评分"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -23,83 +115,6 @@
     <div class="main-content">
       <!-- 左侧控制面板 -->
       <div class="control-panel">
-        <!-- 指标筛选 -->
-        <div class="filter-section">
-          <h3>筛选条件</h3>
-          
-          <!-- 一级指标 -->
-          <div class="indicator-group">
-            <h4>一级指标</h4>
-            <div class="checkbox-group">
-              <label v-for="indicator in indicatorStructure.firstLevel" :key="indicator" class="checkbox-label">
-                <input 
-                  type="checkbox" 
-                  v-model="selectedFirstLevel"
-                  :value="indicator"
-                  @change="updateFilteredIndicators"
-                />
-                {{ indicator }}
-              </label>
-            </div>
-          </div>
-
-          <!-- 二级指标 -->
-          <div class="indicator-group">
-            <h4>二级指标</h4>
-            <div class="checkbox-group">
-              <label v-for="indicator in indicatorStructure.secondLevel" :key="indicator" class="checkbox-label">
-                <input 
-                  type="checkbox" 
-                  v-model="selectedSecondLevel"
-                  :value="indicator"
-                  @change="updateFilteredIndicators"
-                />
-                {{ indicator }}
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- 数据输入 -->
-        <div class="input-section">
-          <h3>数据输入（三级指标）</h3>
-          <div class="indicator-inputs">
-            <div v-for="indicator in filteredThirdIndicators" :key="indicator" class="input-group">
-              <label>{{ indicator }}</label>
-              <input 
-                type="number" 
-                v-model.number="indicatorValues[indicator]"
-                step="0.1"
-                min="0"
-                max="100"
-                placeholder="请输入评分"
-              />
-            </div>
-          </div>
-        </div>
-
-        <!-- 操作按钮 -->
-        <div class="action-buttons">
-          <button @click="addIP" class="btn btn-primary">添加IP</button>
-          <button @click="updateSelectedIP" class="btn btn-secondary" :disabled="!selectedIP">修改IP</button>
-          <button @click="deleteSelectedIP" class="btn btn-danger" :disabled="!selectedIP">删除IP</button>
-          <button @click="evaluateIPs" class="btn btn-success" :disabled="ips.length < 2">分析IP</button>
-          <button @click="performClustering" class="btn btn-info" :disabled="ips.length < 2">聚类分析</button>
-          <button @click="generateTestData" class="btn btn-warning">生成测试数据</button>
-          <button @click="viewHistory" class="btn btn-secondary">查看历史</button>
-          <button @click="exportData" class="btn btn-light">导出数据</button>
-        </div>
-
-        <!-- 高级功能按钮 -->
-        <div class="advanced-buttons">
-          <h4>高级AI功能</h4>
-          <button @click="trainNeuralNetwork" class="btn btn-ai" :disabled="ips.length < 5">神经网络训练</button>
-          <button @click="performSHAPAnalysis" class="btn btn-ai" :disabled="ips.length < 2">SHAP模型解释</button>
-          <button @click="performPCAAnalysis" class="btn btn-ai" :disabled="ips.length < 2">PCA降维分析</button>
-          <button @click="advancedClusteringAnalysis" class="btn btn-ai" :disabled="ips.length < 2">高级聚类</button>
-          <button @click="loadDailySportsNews" class="btn btn-news">体育动态</button>
-        </div>
-
         <!-- IP列表 -->
         <div class="ip-list-section">
           <h3>IP列表</h3>
@@ -123,6 +138,17 @@
             </div>
           </div>
         </div>
+
+        <!-- 操作按钮 -->
+        <div class="action-buttons">
+          <button @click="addIP" class="btn btn-primary">添加IP</button>
+          <button @click="updateSelectedIP" class="btn btn-secondary" :disabled="!selectedIP">修改IP</button>
+          <button @click="deleteSelectedIP" class="btn btn-danger" :disabled="!selectedIP">删除IP</button>
+          <button @click="performComprehensiveAnalysis" class="btn btn-success" :disabled="ips.length < 2">全面分析</button>
+          <button @click="generateTestData" class="btn btn-warning">生成测试数据</button>
+          <button @click="viewHistory" class="btn btn-secondary">查看历史</button>
+          <button @click="exportData" class="btn btn-light">导出数据</button>
+        </div>
       </div>
 
       <!-- 右侧展示区域 -->
@@ -133,7 +159,10 @@
           <div class="chart-panel">
             <h3>适应度变化曲线</h3>
             <div class="chart">
-              <canvas id="fitnessChart" ref="fitnessChart"></canvas>
+              <canvas id="fitnessChart" ref="fitnessChart" v-if="evaluationResult && evaluationResult.fitnessHistory.length > 0"></canvas>
+              <div v-else class="chart-placeholder">
+                点击"全面分析"按钮后显示遗传算法适应度变化曲线
+              </div>
             </div>
           </div>
 
@@ -141,7 +170,10 @@
           <div class="chart-panel">
             <h3>IP评分分布</h3>
             <div class="chart">
-              <canvas id="scoreChart" ref="scoreChart"></canvas>
+              <canvas id="scoreChart" ref="scoreChart" v-if="evaluationResult && evaluationResult.evaluation.length > 0"></canvas>
+              <div v-else class="chart-placeholder">
+                点击"全面分析"按钮后显示IP评分分布图表
+              </div>
             </div>
           </div>
 
@@ -149,15 +181,10 @@
           <div class="chart-panel">
             <h3>重要指标影响</h3>
             <div class="chart">
-              <canvas id="radarChart" ref="radarChart"></canvas>
-            </div>
-          </div>
-
-          <!-- 聚类分析图 -->
-          <div class="chart-panel" v-if="clusteringResult">
-            <h3>聚类分析结果</h3>
-            <div class="chart">
-              <canvas id="clusterChart" ref="clusterChart"></canvas>
+              <canvas id="radarChart" ref="radarChart" v-if="evaluationResult && evaluationResult.weights.length > 0"></canvas>
+              <div v-else class="chart-placeholder">
+                点击"全面分析"按钮后显示重要指标权重雷达图
+              </div>
             </div>
           </div>
 
@@ -213,7 +240,7 @@
                 <img :src="advancedClusterImage" alt="高级聚类分析图" />
               </div>
               <div v-else class="chart-placeholder">
-                点击"高级聚类"按钮后显示带凸包的聚类分析图表
+                点击"全面分析"按钮后显示带凸包的聚类分析图表
               </div>
             </div>
           </div>
@@ -392,6 +419,10 @@ const showIPDialog = ref(false);
 const showHistoryDialog = ref(false);
 const showClusterDialog = ref(false);
 const editMode = ref(false);
+
+// UI控制状态
+const showFilterPanel = ref(true);
+const showDataEntryPanel = ref(true);
 
 // 表单数据
 const ipForm = reactive({
@@ -593,27 +624,36 @@ const selectIP = (ip: IP) => {
   });
 };
 
-const evaluateIPs = async () => {
+const performComprehensiveAnalysis = async () => {
   if (ips.value.length < 2) {
-    alert('至少需要2个IP进行评估');
+    alert('至少需要2个IP进行全面分析');
     return;
   }
   
   try {
     loading.value = true;
-    loadingText.value = '评估中...';
+    loadingText.value = '全面分析中...';
     
+    // 添加调试日志
+    addLog('=== 开始全面分析 ===');
+    addLog(`选择的组别: ${selectedGroup.value}`);
+    addLog(`筛选的指标数量: ${filteredThirdIndicators.value.length}`);
+    addLog(`筛选的指标: ${filteredThirdIndicators.value.join(', ')}`);
+    
+    // 步骤1: 基础评估
+    addLog('🔄 进行基础IP评估...');
     const response = await ipApi.evaluate(selectedGroup.value, filteredThirdIndicators.value);
     if (response.data) {
       evaluationResult.value = response.data;
       
-      addLog('=== 评估完成 ===');
-      addLog(`使用AHP计算权重: ${response.data.weights.map(w => w.toFixed(3)).join(', ')}`);
-      addLog('IP评估结果:');
+      addLog('✅ 基础评估完成');
+      addLog(`使用的指标数量: ${response.data.selectedIndicators ? response.data.selectedIndicators.length : '全部32个'}`);
+      addLog(`AHP权重: ${response.data.weights.map(w => w.toFixed(3)).join(', ')}`);
+      addLog('IP分析结果:');
       response.data.evaluation.forEach(result => {
         addLog(`${result.rank}. ${result.name}: ${result.score.toFixed(2)} (±${result.error.toFixed(2)})`);
       });
-      
+
       // 更新IP列表中的评分
       ips.value.forEach((ip) => {
         const result = response.data?.evaluation.find(r => r.name === ip.name);
@@ -621,15 +661,113 @@ const evaluateIPs = async () => {
           (ip as any).score = result.score;
         }
       });
-      
-      await loadStatistics();
+
+      // 渲染基础图表
+      await nextTick();
+      addLog(`📋 评估结果数据: 
+        - 适应度历史长度: ${response.data.fitnessHistory?.length || 0}
+        - 评估结果数量: ${response.data.evaluation?.length || 0}  
+        - 权重数量: ${response.data.weights?.length || 0}`);
       renderCharts();
     }
+
+    // 步骤2: 神经网络训练
+    if (ips.value.length >= 5) {
+      addLog('🔄 开始神经网络训练...');
+      loadingText.value = '神经网络训练中...';
+      try {
+        const nnResponse = await pythonMLApi.trainNeuralNetwork(ips.value);
+        if (nnResponse.success && nnResponse.data) {
+          neuralNetworkResult.value = nnResponse.data;
+          await nextTick();
+          renderNeuralNetworkCharts();
+          addLog('✅ 神经网络训练完成');
+        } else {
+          addLog(`⚠️ 神经网络训练失败: ${nnResponse.error || '未知错误'}`);
+        }
+      } catch (error) {
+        addLog(`⚠️ 神经网络训练失败: ${error}`);
+      }
+    } else {
+      addLog('⚠️ IP数量不足5个，跳过神经网络训练');
+    }
+
+    // 步骤3: SHAP模型解释
+    if (ips.value.length >= 3) {
+      addLog('🔄 开始SHAP模型解释...');
+      loadingText.value = 'SHAP分析中...';
+      try {
+        const shapResponse = await pythonMLApi.shapExplain(ips.value);
+        if (shapResponse.success && shapResponse.data) {
+          shapResult.value = shapResponse.data;
+          await nextTick();
+          renderSHAPChart();
+          addLog('✅ SHAP模型解释完成');
+        } else {
+          addLog(`⚠️ SHAP分析失败: ${shapResponse.error || '未知错误'}`);
+        }
+      } catch (error) {
+        addLog(`⚠️ SHAP分析失败: ${error}`);
+      }
+    } else {
+      addLog('⚠️ IP数量不足3个，跳过SHAP分析');
+    }
+
+    // 步骤4: PCA降维分析
+    if (ips.value.length >= 2) {
+      addLog('🔄 开始PCA降维分析...');
+      loadingText.value = 'PCA分析中...';
+      try {
+        const pcaResponse = await pythonMLApi.pcaAnalysis(ips.value);
+        if (pcaResponse.success && pcaResponse.pca_results) {
+          pcaResult.value = pcaResponse;
+          await nextTick();
+          renderPCAChart();
+          addLog('✅ PCA降维分析完成');
+        } else {
+          addLog(`⚠️ PCA分析失败: ${pcaResponse.error || '未知错误'}`);
+        }
+      } catch (error) {
+        addLog(`⚠️ PCA分析失败: ${error}`);
+      }
+    } else {
+      addLog('⚠️ IP数量不足2个，跳过PCA分析');
+    }
+
+    // 步骤5: 高级聚类分析
+    if (ips.value.length >= 2) {
+      addLog('🔄 开始高级聚类分析...');
+      loadingText.value = '聚类分析中...';
+      try {
+        const clusterResponse = await pythonMLApi.advancedClustering(ips.value);
+        if (clusterResponse.success && clusterResponse.data) {
+          advancedClusterResult.value = clusterResponse.data;
+          await nextTick();
+          generateAdvancedClusteringVisualization();
+          addLog('✅ 高级聚类分析完成');
+        } else {
+          addLog(`⚠️ 聚类分析失败: ${clusterResponse.error || '未知错误'}`);
+        }
+      } catch (error) {
+        addLog(`⚠️ 聚类分析失败: ${error}`);
+      }
+    } else {
+      addLog('⚠️ IP数量不足2个，跳过高级聚类分析');
+    }
+
+    addLog('=== 🎉 全面分析完成 ===');
+    alert('全面分析完成！所有功能已执行，请查看各项分析结果。');
+    
+    // 更新统计信息
+    await loadStatistics();
+    
   } catch (error) {
-    console.error('评估失败:', error);
-    alert('评估失败');
+    console.error('全面分析失败:', error);
+    addLog(`❌ 分析失败: ${error}`);
+    alert(`分析失败: ${error instanceof Error ? error.message : '未知错误'}`);
   } finally {
     loading.value = false;
+    loadingText.value = '';
   }
 };
 
@@ -670,7 +808,7 @@ const runClustering = async () => {
 };
 
 const generateTestData = async () => {
-  if (!confirm('确定要生成测试数据吗？这将添加10个测试IP。')) return;
+  if (!confirm('确定要生成测试数据吗？这将添加10个测试IP，并自动进行全面分析。')) return;
   
   try {
     loading.value = true;
@@ -683,6 +821,10 @@ const generateTestData = async () => {
       await loadIPs();
       await loadGroups();
       await loadStatistics();
+      
+      // 自动进行全面分析
+      addLog('🚀 自动开始全面分析...');
+      await performComprehensiveAnalysis();
     }
   } catch (error) {
     console.error('生成测试数据失败:', error);
@@ -759,25 +901,41 @@ const addLog = (message: string) => {
 
 const renderCharts = () => {
   nextTick(() => {
+    addLog('🎨 开始渲染图表...');
+    
     // 1. 适应度变化曲线
     if (evaluationResult.value && evaluationResult.value.fitnessHistory.length > 0) {
+      addLog('📈 渲染适应度变化曲线');
       renderFitnessChart();
+    } else {
+      addLog('⚠️ 跳过适应度曲线：无数据');
     }
     
     // 2. IP评分分布
     if (evaluationResult.value && evaluationResult.value.evaluation.length > 0) {
+      addLog('📊 渲染IP评分分布图');
       renderScoreChart();
+    } else {
+      addLog('⚠️ 跳过评分分布图：无数据');
     }
     
     // 3. 重要指标影响雷达图
     if (evaluationResult.value && evaluationResult.value.weights.length > 0) {
+      addLog('🎯 渲染重要指标雷达图');
       renderRadarChart();
+    } else {
+      addLog('⚠️ 跳过雷达图：无权重数据');
     }
     
     // 4. 聚类分析图
     if (clusteringResult.value) {
+      addLog('🔗 渲染聚类分析图');
       renderClusterChart();
+    } else {
+      addLog('⚠️ 跳过聚类图：无聚类数据');
     }
+    
+    addLog('✅ 图表渲染完成');
   });
 };
 
@@ -1035,6 +1193,17 @@ const closeDialogs = () => {
   showClusterDialog.value = false;
 };
 
+// UI控制函数
+const toggleFilterPanel = () => {
+  showFilterPanel.value = !showFilterPanel.value;
+  addLog(`筛选面板已${showFilterPanel.value ? '显示' : '隐藏'}`);
+};
+
+const toggleDataEntry = () => {
+  showDataEntryPanel.value = !showDataEntryPanel.value;
+  addLog(`数据录入面板已${showDataEntryPanel.value ? '显示' : '隐藏'}`);
+};
+
 // 高级AI功能函数
 const trainNeuralNetwork = async () => {
   if (ips.value.length < 5) {
@@ -1047,21 +1216,21 @@ const trainNeuralNetwork = async () => {
     loadingText.value = '神经网络训练中...';
     
     const response = await pythonMLApi.trainNeuralNetwork(ips.value);
-    if (response.success) {
+    if (response.success && response.data) {
       // 保存结果
-      neuralNetworkResult.value = response;
+      neuralNetworkResult.value = response.data;
       
       addLog('=== 神经网络训练完成 ===');
-      addLog(`训练轮次: ${response.model_info.epochs}`);
-      addLog(`最终损失: ${response.model_info.final_loss.toFixed(4)}`);
+      addLog(`训练轮次: ${response.data.model_info?.epochs || 'N/A'}`);
+      addLog(`最终损失: ${response.data.model_info?.final_loss?.toFixed(4) || 'N/A'}`);
       addLog('预测结果:');
-      response.predictions.forEach((pred: any) => {
+      response.data.predictions?.forEach((pred: any) => {
         addLog(`${pred.name}: 预测评分 ${pred.predicted_score.toFixed(2)} (置信度: ${pred.confidence.toFixed(2)})`);
       });
       
       // 显示特征重要性
       addLog('特征重要性:');
-      response.feature_importance.forEach((importance: number, index: number) => {
+      response.data.feature_importance?.forEach((importance: number, index: number) => {
         addLog(`指标${index + 1}: ${importance.toFixed(3)}`);
       });
       
@@ -1091,18 +1260,18 @@ const performSHAPAnalysis = async () => {
     loadingText.value = 'SHAP模型解释中...';
     
     const response = await pythonMLApi.shapExplain(ips.value);
-    if (response.success) {
+    if (response.success && response.data) {
       // 保存结果
-      shapResult.value = response;
+      shapResult.value = response.data;
       
       addLog('=== SHAP模型解释完成 ===');
       addLog('各特征的平均SHAP值:');
-      response.mean_shap_values.forEach((value: number, index: number) => {
-        addLog(`${response.feature_names[index]}: ${value.toFixed(4)}`);
+      response.data.mean_shap_values?.forEach((value: number, index: number) => {
+        addLog(`${response.data.feature_names?.[index] || `特征${index + 1}`}: ${value.toFixed(4)}`);
       });
       
       addLog('各IP的SHAP解释:');
-      response.ip_explanations.forEach((explanation: any) => {
+      response.data.ip_explanations?.forEach((explanation: any) => {
         addLog(`${explanation.name}: 预测值 ${explanation.predicted_value.toFixed(2)}`);
       });
       
@@ -1178,26 +1347,26 @@ const advancedClusteringAnalysis = async () => {
     loadingText.value = '高级聚类分析中...';
     
     const response = await pythonMLApi.advancedClustering(ips.value, Number(nClusters), true);
-    if (response.success) {
+    if (response.success && response.data) {
       // 保存结果
-      advancedClusterResult.value = response;
+      advancedClusterResult.value = response.data;
       
       addLog('=== 高级聚类分析完成 ===');
       addLog(`聚类数量: ${nClusters}`);
-      addLog(`轮廓系数: ${response.quality_metrics.silhouette_score.toFixed(4)}`);
-      addLog(`Calinski-Harabasz指数: ${response.quality_metrics.calinski_harabasz_score.toFixed(4)}`);
+      addLog(`轮廓系数: ${response.data.quality_metrics?.silhouette_score?.toFixed(4) || 'N/A'}`);
+      addLog(`Calinski-Harabasz指数: ${response.data.quality_metrics?.calinski_harabasz_score?.toFixed(4) || 'N/A'}`);
       
-      if (response.pca_info.used && response.pca_info.variance_explained) {
-        addLog(`PCA方差解释: ${response.pca_info.variance_explained.map((v: number) => (v * 100).toFixed(1) + '%').join(', ')}`);
+      if (response.data.pca_info?.used && response.data.pca_info?.variance_explained) {
+        addLog(`PCA方差解释: ${response.data.pca_info.variance_explained.map((v: number) => (v * 100).toFixed(1) + '%').join(', ')}`);
       }
       
       addLog('聚类结果:');
-      response.clustering_results.forEach((result: any) => {
+      response.data.clustering_results?.forEach((result: any) => {
         addLog(`${result.name}: 簇${result.cluster + 1} (距离质心: ${result.distance_to_centroid.toFixed(3)})`);
       });
       
       addLog('凸包信息:');
-      response.convex_hulls.forEach((hull: any) => {
+      response.data.convex_hulls?.forEach((hull: any) => {
         addLog(`簇${hull.cluster_id + 1}: 面积 ${hull.area.toFixed(3)}`);
       });
       
@@ -1220,9 +1389,9 @@ const loadDailySportsNews = async () => {
     loadingText.value = '加载体育动态中...';
     
     const response = await pythonMLApi.getDailySportsNews();
-    if (response.success) {
+    if (response.success && response.data) {
       addLog('=== 今日新疆体育动态 ===');
-      response.news.forEach((news: any) => {
+      response.data.news?.forEach((news: any) => {
         addLog(`📰 ${news.title}`);
         addLog(`   ${news.content}`);
         addLog(`   地区: ${news.region} | 项目: ${news.sport}`);
@@ -1494,116 +1663,230 @@ const generateAdvancedClusteringVisualization = async () => {
   margin-bottom: 20px;
 }
 
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .header h1 {
   color: #2c3e50;
   margin-bottom: 10px;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.header-btn {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  min-width: 100px;
+  justify-content: center;
+}
+
+.header-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.header-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.header-btn.filter-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.header-btn.filter-btn:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+}
+
+.header-btn.entry-btn {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.header-btn.entry-btn:hover {
+  background: linear-gradient(135deg, #ee82f0 0%, #f04658 100%);
+}
+
+.btn-icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  stroke-width: 2;
+}
+
 .stats-bar {
   display: flex;
-  gap: 20px;
-  padding: 10px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border: 1px solid #e9ecef;
+}
+
+.stats-container {
+  display: flex;
+  gap: 30px;
 }
 
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 12px;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: transform 0.2s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.stat-icon {
+  font-size: 20px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
+}
+
+.stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .stat-label {
-  font-weight: bold;
-  color: #666;
+  font-size: 12px;
+  color: #6c757d;
+  font-weight: 500;
 }
 
 .stat-value {
+  font-size: 18px;
   color: #007bff;
   font-weight: bold;
 }
 
-.main-content {
-  display: grid;
-  grid-template-columns: 350px 1fr;
-  gap: 20px;
-  min-height: 80vh;
-  align-items: start;
+.stats-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
-.control-panel {
-  background: white;
-  border-radius: 8px;
+.quick-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.7);
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+}
+
+.update-time {
+  font-size: 11px;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+/* 过渡动画 */
+.filter-section,
+.input-section {
+  margin: 20px 0;
   padding: 20px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  overflow: visible;
-  height: auto;
-  overflow-y: auto;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 2px solid #dee2e6;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+  transition: all 0.3s ease;
 }
 
-.control-panel::-webkit-scrollbar {
-  width: 8px;
+.filter-section:hover, .input-section:hover {
+  box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+  transform: translateY(-1px);
 }
 
-.control-panel::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-.control-panel::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-.control-panel::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-.filter-section, .input-section, .ip-list-section {
+.filter-section h3, .input-section h3 {
+  margin-top: 0;
   margin-bottom: 20px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #eee;
+  color: #495057;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  position: relative;
 }
 
-.filter-section h3, .input-section h3, .ip-list-section h3 {
-  margin-bottom: 15px;
-  color: #2c3e50;
+.filter-section h3::after, .input-section h3::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 2px;
 }
 
 .indicator-group {
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
 
 .indicator-group h4 {
-  margin-bottom: 10px;
-  color: #495057;
-  font-size: 14px;
+  margin-bottom: 12px;
+  color: #6c757d;
+  font-size: 16px;
+  font-weight: 500;
+  padding-left: 8px;
+  border-left: 4px solid #007bff;
 }
 
 .checkbox-group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px 12px;
   padding-right: 8px;
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 13px;
   cursor: pointer;
-  padding: 2px 0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
 }
 
 .checkbox-label:hover {
-  background: #f8f9fa;
+  background: rgba(102,126,234,0.1);
 }
 
 .indicator-inputs {
-  max-height: 300px;
   overflow-y: auto;
   padding-right: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 8px 12px;
 }
 
 .indicator-inputs::-webkit-scrollbar {
@@ -1612,35 +1895,55 @@ const generateAdvancedClusteringVisualization = async () => {
 
 .indicator-inputs::-webkit-scrollbar-track {
   background: #f1f1f1;
-  border-radius: 3px;
+  border-radius: 10px;
 }
 
 .indicator-inputs::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
 }
 
 .indicator-inputs::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
 }
 
 .input-group {
   display: flex;
-  flex-direction: column;
-  margin-bottom: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  transition: all 0.2s ease;
+}
+
+.input-group:hover {
+  border-color: #667eea;
+  box-shadow: 0 2px 4px rgba(102,126,234,0.1);
 }
 
 .input-group label {
-  font-size: 12px;
-  margin-bottom: 5px;
+  flex: 1;
+  font-size: 14px;
   color: #495057;
+  margin-right: 12px;
+  font-weight: 500;
 }
 
 .input-group input {
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 13px;
+  width: 100px;
+  padding: 6px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
 }
 
 .action-buttons {
@@ -1956,27 +2259,6 @@ const generateAdvancedClusteringVisualization = async () => {
   100% { transform: rotate(360deg); }
 }
 
-.advanced-buttons {
-  margin-bottom: 20px;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 2px solid #e9ecef;
-}
-
-.advanced-buttons h4 {
-  margin-bottom: 10px;
-  color: #495057;
-  font-size: 14px;
-  text-align: center;
-}
-
-.advanced-buttons .btn {
-  width: 100%;
-  margin-bottom: 5px;
-  font-weight: bold;
-}
-
 .ml-chart-image {
   width: 100%;
   height: 200px;
@@ -2009,29 +2291,51 @@ const generateAdvancedClusteringVisualization = async () => {
   line-height: 1.4;
 }
 
-.filter-section {
-  margin-bottom: 20px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #eee;
-  max-height: 200px;
+/* 主布局样式 */
+.main-content {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 20px;
+  min-height: 80vh;
+  align-items: start;
+}
+
+.control-panel {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow: visible;
+  height: 600px;
   overflow-y: auto;
 }
 
-.filter-section::-webkit-scrollbar {
-  width: 6px;
+.control-panel::-webkit-scrollbar {
+  width: 8px;
 }
 
-.filter-section::-webkit-scrollbar-track {
+.control-panel::-webkit-scrollbar-track {
   background: #f1f1f1;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
-.filter-section::-webkit-scrollbar-thumb {
+.control-panel::-webkit-scrollbar-thumb {
   background: #c1c1c1;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
-.filter-section::-webkit-scrollbar-thumb:hover {
+.control-panel::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+.ip-list-section {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.ip-list-section h3 {
+  margin-bottom: 15px;
+  color: #2c3e50;
 }
 </style> 

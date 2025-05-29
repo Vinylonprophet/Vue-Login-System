@@ -20,8 +20,8 @@ const checkLoginStatus = async () => {
   } catch (error) {
     isLoggedIn.value = false
   }
-}
-
+  }
+  
 // 更新导航栏显示状态
 const updateNavVisibility = () => {
   showNav.value = hideNavRoutes.indexOf(route.path) === -1
