@@ -84,6 +84,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { authApi, type LoginRequest } from '../utils/api'
 
 const router = useRouter()
 
@@ -140,18 +141,41 @@ const handleLogin = async () => {
   isLoading.value = true
   
   try {
-    // 使用认证服务进行登录 - 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    const loginData: LoginRequest = {
+      email: formData.email,
+      password: formData.password,
+      rememberMe: formData.rememberMe
+    }
     
-    console.log('登录成功:', formData)
-    alert('登录成功！🎉')
+    const response = await authApi.login(loginData)
     
-    // 登录成功后可以跳转到其他页面
-    // router.push('/dashboard')
+    if (response.success) {
+      console.log('登录成功:', response.data?.user)
+      alert(`登录成功！欢迎回来，${response.data?.user.name}！🎉`)
+      
+      // 登录成功后可以跳转到其他页面
+      // router.push('/dashboard')
+    } else {
+      throw new Error(response.message || '登录失败')
+    }
     
   } catch (error: any) {
     console.error('登录失败:', error)
-    alert('登录失败：' + (error?.message || '请重试'))
+    
+    // 根据错误类型显示不同的消息
+    let errorMessage = '登录失败，请重试'
+    
+    if (error.message.includes('邮箱或密码错误')) {
+      errorMessage = '邮箱或密码错误，请检查后重试'
+    } else if (error.message.includes('网络')) {
+      errorMessage = '网络连接失败，请检查网络后重试'
+    } else if (error.message.includes('账户已被禁用')) {
+      errorMessage = '账户已被禁用，请联系管理员'
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
+    alert(errorMessage)
   } finally {
     isLoading.value = false
   }

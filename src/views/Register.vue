@@ -105,6 +105,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { authApi, type RegisterRequest } from '../utils/api'
 
 const router = useRouter()
 
@@ -199,18 +200,39 @@ const handleRegister = async () => {
   isLoading.value = true
   
   try {
-    // 使用认证服务进行注册 - 模拟API调用
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    const registerData: RegisterRequest = {
+      name: formData.name,
+      email: formData.email,
+      password: formData.password
+    }
     
-    console.log('注册成功:', formData)
-    alert('注册成功！🎉')
+    const response = await authApi.register(registerData)
     
-    // 注册成功后跳转到登录页面
-    router.push('/login')
+    if (response.success) {
+      console.log('注册成功:', response.data?.user)
+      alert(`注册成功！欢迎，${response.data?.user.name}！🎉`)
+      
+      // 注册成功后跳转到登录页面
+      router.push('/login')
+    } else {
+      throw new Error(response.message || '注册失败')
+    }
     
   } catch (error: any) {
     console.error('注册失败:', error)
-    alert('注册失败：' + (error?.message || '请重试'))
+    
+    // 根据错误类型显示不同的消息
+    let errorMessage = '注册失败，请重试'
+    
+    if (error.message.includes('邮箱已被注册') || error.message.includes('用户已存在')) {
+      errorMessage = '该邮箱已被注册，请使用其他邮箱或直接登录'
+    } else if (error.message.includes('网络')) {
+      errorMessage = '网络连接失败，请检查网络后重试'
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
+    alert(errorMessage)
   } finally {
     isLoading.value = false
   }
