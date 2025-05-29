@@ -84,7 +84,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { authApi, type LoginRequest } from '../utils/api'
+import { apiClient, type LoginRequest } from '../utils/api'
 
 const router = useRouter()
 
@@ -147,14 +147,13 @@ const handleLogin = async () => {
       rememberMe: formData.rememberMe
     }
     
-    const response = await authApi.login(loginData)
+    const response = await apiClient.login(loginData)
     
     if (response.success) {
-      console.log('登录成功:', response.data?.user)
-      alert(`登录成功！欢迎回来，${response.data?.user.name}！🎉`)
+      console.log('登录成功:', response.user)
       
-      // 登录成功后可以跳转到其他页面
-      // router.push('/dashboard')
+      // 登录成功后跳转到dashboard
+      router.push('/dashboard')
     } else {
       throw new Error(response.message || '登录失败')
     }

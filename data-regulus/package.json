@@ -1,7 +1,7 @@
 {
   "name": "data-regulus-backend",
   "version": "1.0.0",
-  "description": "Data Regulus后端服务，包含身份验证功能",
+  "description": "Data Regulus后端服务，包含身份验证功能和IP评估系统",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,11 +9,14 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "mongodb": "^6.0.0",
+    "axios": "^1.9.0",
     "bcrypt": "^5.1.1",
-    "cookie-parser": "^1.4.6"
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "ml-matrix": "^6.10.8",
+    "mongodb": "^6.0.0",
+    "morgan": "^1.10.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
@@ -23,8 +26,10 @@
     "mongodb",
     "authentication",
     "session",
-    "cookie"
+    "cookie",
+    "ip-evaluation",
+    "machine-learning"
   ],
   "author": "",
   "license": "ISC"
-} 
+}

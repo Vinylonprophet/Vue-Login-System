@@ -105,7 +105,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { authApi, type RegisterRequest } from '../utils/api'
+import { apiClient, type RegisterRequest } from '../utils/api'
 
 const router = useRouter()
 
@@ -201,16 +201,16 @@ const handleRegister = async () => {
   
   try {
     const registerData: RegisterRequest = {
-      name: formData.name,
+      username: formData.name,
       email: formData.email,
       password: formData.password
     }
     
-    const response = await authApi.register(registerData)
+    const response = await apiClient.register(registerData)
     
     if (response.success) {
-      console.log('注册成功:', response.data?.user)
-      alert(`注册成功！欢迎，${response.data?.user.name}！🎉`)
+      console.log('注册成功:', response.user)
+      alert(`注册成功！欢迎，${response.user?.username}！🎉`)
       
       // 注册成功后跳转到登录页面
       router.push('/login')

@@ -20,14 +20,14 @@ const validatePassword = (password) => {
 // 注册接口
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { username, email, password } = req.body;
 
     // 输入验证
-    if (!name || !name.trim()) {
+    if (!username || !username.trim()) {
       return res.status(400).json({
         success: false,
-        message: '请输入姓名',
-        code: 'INVALID_NAME'
+        message: '请输入用户名',
+        code: 'INVALID_USERNAME'
       });
     }
 
@@ -49,7 +49,7 @@ router.post('/register', async (req, res) => {
 
     // 创建用户
     const user = await userModel.createUser({
-      name: name.trim(),
+      username: username.trim(),
       email: email.toLowerCase().trim(),
       password
     });
@@ -57,9 +57,7 @@ router.post('/register', async (req, res) => {
     res.status(201).json({
       success: true,
       message: '注册成功',
-      data: {
-        user: userModel.formatUserResponse(user)
-      }
+      user: userModel.formatUserResponse(user)
     });
 
   } catch (error) {
@@ -155,10 +153,8 @@ router.post('/login', async (req, res) => {
     res.json({
       success: true,
       message: '登录成功',
-      data: {
-        user: userModel.formatUserResponse(user),
-        sessionExpires: sessionData.expiresAt
-      }
+      user: userModel.formatUserResponse(user),
+      sessionExpires: sessionData.expiresAt
     });
 
   } catch (error) {

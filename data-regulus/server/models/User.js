@@ -20,7 +20,7 @@ class User {
 
       // 创建用户对象
       const user = {
-        name: userData.name,
+        username: userData.username,
         email: userData.email,
         password: hashedPassword,
         createdAt: new Date(),
