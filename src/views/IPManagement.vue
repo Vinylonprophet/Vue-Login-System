@@ -490,6 +490,7 @@ const deleteIP = async (ip: IP) => {
     }
     
     await loadIPs();
+    await loadGroups();
     await loadStatistics();
     
     toast.success(`IP "${ip.name}" 删除成功`);

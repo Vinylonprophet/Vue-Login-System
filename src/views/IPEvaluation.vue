@@ -589,6 +589,7 @@ const deleteSelectedIP = async () => {
     addLog(`已删除IP: ${selectedIP.value.name}`);
     selectedIP.value = null;
     await loadIPs();
+    await loadGroups(); // 添加这行来刷新组别列表
     await loadStatistics();
   } catch (error) {
     console.error('删除IP失败:', error);
