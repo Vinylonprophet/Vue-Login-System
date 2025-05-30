@@ -100,7 +100,7 @@
                 </div>
                 <div class="ip-details">
                   <div class="ip-group">组别: {{ ip.group }}</div>
-                  <div class="ip-indicators">指标数: {{ ip.indicators?.length || 0 }}</div>
+                  <div class="ip-indicators">指标数: {{ getIndicatorCount(ip.indicators) }}</div>
                 </div>
               </div>
             </div>
@@ -153,7 +153,7 @@
 
           <!-- 操作按钮 -->
           <div class="form-actions">
-            <button @click="saveIP" class="btn btn-primary">保存IP</button>
+            <button @click="saveIP" class="btn" :class="saveButtonClass">{{ saveButtonText }}</button>
             <button @click="clearForm" class="btn btn-secondary">清空表单</button>
             <button @click="fillRandomData" class="btn btn-warning">随机填充</button>
           </div>
@@ -180,7 +180,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from 'vue';
+import { ref, reactive, onMounted, nextTick, computed } from 'vue';
 import { ipApi, type IP, type IndicatorStructure } from '../utils/api';
 import { toast } from '../utils/toast';
 
@@ -199,7 +199,10 @@ const indicatorStructure = ref<IndicatorStructure>({
   secondLevel: [],
   firstToSecond: {},
   secondToThird: {},
-  allThird: []
+  allThird: [],
+  indicatorPropertyMap: {},
+  propertyIndicatorMap: {},
+  allProperties: []
 });
 
 // 筛选后的三级指标（用于显示所有可用指标）
@@ -236,6 +239,49 @@ const ipForm = reactive({
 // 编辑状态
 const editMode = ref(false);
 const editingIPId = ref<string | null>(null);
+
+// 添加计算属性来判断当前操作模式
+const currentMode = computed(() => {
+  // 如果当前是编辑模式，返回'edit'
+  if (editMode.value) {
+    return 'edit';
+  }
+  
+  // 如果不是编辑模式，检查当前输入的IP名称和组别是否同时已存在
+  const currentName = ipForm.name.trim();
+  const currentGroup = ipForm.group.trim();
+  if (currentName && currentGroup && ips.value.some(ip => ip.name === currentName && ip.group === currentGroup)) {
+    return 'update'; // 名称和组别都已存在，应该是更新操作
+  }
+  
+  return 'create'; // 新建操作
+});
+
+// 计算属性：动态按钮文字
+const saveButtonText = computed(() => {
+  switch (currentMode.value) {
+    case 'edit':
+      return '保存修改';
+    case 'update':
+      return '修改IP';
+    case 'create':
+    default:
+      return '保存IP';
+  }
+});
+
+// 计算属性：动态按钮样式类
+const saveButtonClass = computed(() => {
+  switch (currentMode.value) {
+    case 'edit':
+      return 'btn-info'; // 蓝色 - 编辑模式
+    case 'update':
+      return 'btn-warning'; // 橙色 - 更新现有IP
+    case 'create':
+    default:
+      return 'btn-primary'; // 绿色 - 创建新IP
+  }
+});
 
 // 生命周期
 onMounted(async () => {
@@ -325,11 +371,15 @@ const saveIP = async () => {
   
   try {
     loading.value = true;
-    loadingText.value = editMode.value ? '更新IP中...' : '保存IP中...';
     
-    const indicators = filteredThirdIndicators.value.map(indicator => 
-      indicatorValues.value[indicator] || 0
-    );
+    // 将指标值从中文名称映射为对象格式
+    const indicators: Record<string, number> = {};
+    filteredThirdIndicators.value.forEach(indicator => {
+      const propertyName = getPropertyNameForIndicator(indicator);
+      if (propertyName) {
+        indicators[propertyName] = indicatorValues.value[indicator] || 0;
+      }
+    });
     
     const ipData = {
       name: ipForm.name.trim(),
@@ -337,13 +387,34 @@ const saveIP = async () => {
       indicators
     };
     
-    if (editMode.value && editingIPId.value) {
-      await ipApi.updateIP(editingIPId.value, ipData);
-      addLog(`已更新IP: ${ipData.name}`);
+    // 检查操作模式
+    const mode = currentMode.value;
+    let targetIPId = editingIPId.value;
+    
+    // 如果是update模式（名称和组别都已存在但不是从选择IP进入的编辑模式）
+    if (mode === 'update' && !editMode.value) {
+      // 查找同名且同组的IP
+      const existingIP = ips.value.find(ip => ip.name === ipData.name && ip.group === ipData.group);
+      if (existingIP) {
+        targetIPId = existingIP.id;
+        // 确认是否要覆盖现有IP
+        const confirmed = confirm(`IP "${ipData.name}" (组别: ${ipData.group}) 已存在，是否要修改现有数据？`);
+        if (!confirmed) {
+          loading.value = false;
+          return;
+        }
+      }
+    }
+    
+    if ((mode === 'edit' || mode === 'update') && targetIPId) {
+      loadingText.value = '更新IP中...';
+      await ipApi.updateIP(targetIPId, ipData);
+      addLog(`已更新IP: ${ipData.name} (组别: ${ipData.group})`);
       toast.success(`IP "${ipData.name}" 更新成功！`);
     } else {
+      loadingText.value = '保存IP中...';
       await ipApi.addIP(ipData);
-      addLog(`已添加IP: ${ipData.name}`);
+      addLog(`已添加IP: ${ipData.name} (组别: ${ipData.group})`);
       toast.success(`IP "${ipData.name}" 保存成功！`);
     }
     
@@ -367,11 +438,39 @@ const selectIP = (ip: IP) => {
   ipForm.name = ip.name;
   ipForm.group = ip.group;
   
-  filteredThirdIndicators.value.forEach((indicator, index) => {
-    indicatorValues.value[indicator] = ip.indicators[index] || 0;
-  });
+  // 清空现有的指标值
+  initializeIndicatorValues();
+  
+  // 如果indicators是对象格式，直接从对象中获取值
+  if (ip.indicators && typeof ip.indicators === 'object') {
+    // 遍历所有指标，从IP的indicators对象中获取对应的值
+    filteredThirdIndicators.value.forEach(indicator => {
+      // 需要将中文指标名转换为属性名
+      const propertyName = getPropertyNameForIndicator(indicator);
+      if (propertyName && ip.indicators[propertyName] !== undefined) {
+        indicatorValues.value[indicator] = ip.indicators[propertyName];
+      }
+    });
+  }
+  // 如果indicators仍然是数组格式（向后兼容）
+  else if (Array.isArray(ip.indicators)) {
+    filteredThirdIndicators.value.forEach((indicator, index) => {
+      indicatorValues.value[indicator] = ip.indicators[index] || 0;
+    });
+  }
   
   addLog(`选择IP: ${ip.name}`);
+};
+
+// 辅助函数：将中文指标名转换为属性名
+const getPropertyNameForIndicator = (indicator: string): string | null => {
+  // 使用从后端获取的映射关系
+  if (indicatorStructure.value.indicatorPropertyMap) {
+    return indicatorStructure.value.indicatorPropertyMap[indicator] || null;
+  }
+  
+  // 如果映射关系未加载，返回null
+  return null;
 };
 
 const deleteIP = async (ip: IP) => {
@@ -596,6 +695,16 @@ const toggleDataEntry = () => {
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleString('zh-CN');
+};
+
+const getIndicatorCount = (indicators: any): number => {
+  if (typeof indicators === 'object' && indicators !== null) {
+    return Object.keys(indicators).length;
+  } else if (Array.isArray(indicators)) {
+    return indicators.length;
+  } else {
+    return 0;
+  }
 };
 </script>
 
@@ -1423,6 +1532,15 @@ const formatDate = (dateString: string) => {
   box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
+.btn-primary {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+}
+
 .btn-secondary {
   background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
   color: white;
@@ -1431,6 +1549,19 @@ const formatDate = (dateString: string) => {
 .btn-warning {
   background: linear-gradient(135deg, #ffc107 0%, #ff9a9e 100%);
   color: white;
+}
+
+.btn-warning:hover {
+  background: linear-gradient(135deg, #e0a800 0%, #ff8a80 100%);
+}
+
+.btn-info {
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+  color: white;
+}
+
+.btn-info:hover {
+  background: linear-gradient(135deg, #138496 0%, #117a8b 100%);
 }
 
 .btn-light {

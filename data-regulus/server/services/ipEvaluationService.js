@@ -38,6 +38,51 @@ class IPEvaluationService {
             "民族自豪感", "教育意义", "社会和谐", "规则创新", "场地设备创新", "商业化创新",
             "跨界合作创新", "媒体传播创新", "社交平台创新"
         ];
+
+        // 指标属性名映射 - 将中文指标名映射为英文属性名
+        this.indicatorPropertyMap = {
+            "历史渊源": "historicalOrigin",
+            "文化象征性": "culturalSymbolism", 
+            "民族记忆": "ethnicMemory",
+            "独特性": "uniqueness",
+            "跨民族文化联系": "interEthnicCulturalConnection",
+            "跨民族文化认同": "interEthnicCulturalIdentity",
+            "传播渠道": "communicationChannels",
+            "媒体关注度": "mediaAttention",
+            "跨平台传播": "crossPlatformCommunication",
+            "社会关注度": "socialAttention",
+            "民众参与度": "publicParticipation",
+            "政府支持度": "governmentSupport",
+            "消费者需求": "consumerDemand",
+            "市场成熟度": "marketMaturity",
+            "市场增长潜力": "marketGrowthPotential",
+            "竞争者数量": "competitorCount",
+            "竞争者创新能力": "competitorInnovationCapability",
+            "竞争壁垒": "competitiveBarriers",
+            "商业模式多样性": "businessModelDiversity",
+            "品牌价值": "brandValue",
+            "合作机会": "cooperationOpportunities",
+            "民族文化传承": "ethnicCulturalHeritage",
+            "民族文化融合": "ethnicCulturalIntegration",
+            "民族自豪感": "ethnicPride",
+            "教育意义": "educationalSignificance",
+            "社会和谐": "socialHarmony",
+            "规则创新": "ruleInnovation",
+            "场地设备创新": "venueEquipmentInnovation",
+            "商业化创新": "commercializationInnovation",
+            "跨界合作创新": "crossSectorCooperationInnovation",
+            "媒体传播创新": "mediaCommunicationInnovation",
+            "社交平台创新": "socialPlatformInnovation"
+        };
+
+        // 反向映射：属性名到中文指标名
+        this.propertyIndicatorMap = {};
+        Object.keys(this.indicatorPropertyMap).forEach(indicator => {
+            this.propertyIndicatorMap[this.indicatorPropertyMap[indicator]] = indicator;
+        });
+
+        // 所有属性名列表
+        this.allProperties = Object.values(this.indicatorPropertyMap);
     }
 
     // AHP权重计算
@@ -98,31 +143,28 @@ class IPEvaluationService {
         // 获取当前选择的指标
         const currentIndicators = selectedIndicators || this.allThird;
         
-        // 如果使用了筛选指标，需要从完整数据中提取对应位置的值
+        // 转换IP数据为数组格式供算法使用
         const data = ips.map(ip => {
+            // 首先确保indicators是对象格式
+            let indicatorObject;
+            if (Array.isArray(ip.indicators)) {
+                indicatorObject = this.arrayToObject(ip.indicators);
+            } else {
+                indicatorObject = ip.indicators;
+            }
+            
             if (selectedIndicators && selectedIndicators.length > 0) {
-                // 筛选模式：从完整的32个指标中提取选中的指标
-                if (ip.indicators.length !== this.allThird.length) {
-                    throw new Error(`IP数据格式错误：期望${this.allThird.length}个指标，实际${ip.indicators.length}个`);
-                }
-                
-                // 根据选中的指标名称找到对应的索引位置
-                const selectedIndices = selectedIndicators.map(indicator => {
-                    const index = this.allThird.indexOf(indicator);
-                    if (index === -1) {
+                // 筛选模式：从完整的指标中提取选中的指标
+                return selectedIndicators.map(indicator => {
+                    const propertyName = this.indicatorPropertyMap[indicator];
+                    if (!propertyName || !(propertyName in indicatorObject)) {
                         throw new Error(`未找到指标: ${indicator}`);
                     }
-                    return index;
+                    return indicatorObject[propertyName];
                 });
-                
-                // 提取选中指标对应的数值
-                return selectedIndices.map(index => ip.indicators[index]);
             } else {
-                // 全量模式：使用所有指标
-                if (ip.indicators.length !== this.allThird.length) {
-                    throw new Error(`IP数据格式错误：期望${this.allThird.length}个指标，实际${ip.indicators.length}个`);
-            }
-            return ip.indicators;
+                // 全量模式：使用所有指标，按顺序转换为数组
+                return this.objectToArray(indicatorObject);
             }
         });
 
@@ -202,8 +244,15 @@ class IPEvaluationService {
             throw new Error('IP数量不足以进行聚类分析');
         }
 
-        // 简单的K-means聚类实现
-        const data = ips.map(ip => ip.indicators);
+        // 转换指标数据为数组格式供算法使用
+        const data = ips.map(ip => {
+            if (Array.isArray(ip.indicators)) {
+                return ip.indicators;
+            } else {
+                return this.objectToArray(ip.indicators);
+            }
+        });
+        
         const clusters = this.kmeansClustering(data, clusterCount);
         
         return {
@@ -298,9 +347,12 @@ class IPEvaluationService {
         for (let i = 0; i < count; i++) {
             const name = `${sports[i % sports.length]}_测试${i + 1}`;
             const group = counties[i % counties.length];
-            const indicators = this.allThird.map(() => 
-                Math.round((Math.random() * 10 + 80) * 10) / 10
-            );
+            
+            // 生成对象格式的指标数据
+            const indicators = {};
+            this.allProperties.forEach(property => {
+                indicators[property] = Math.round((Math.random() * 10 + 80) * 10) / 10;
+            });
             
             testIPs.push({
                 name,
@@ -326,6 +378,73 @@ class IPEvaluationService {
     // 获取所有三级指标
     getAllThirdIndicators() {
         return this.allThird;
+    }
+
+    // 获取所有属性名
+    getAllProperties() {
+        return this.allProperties;
+    }
+
+    // 将数组格式的指标数据转换为对象格式
+    arrayToObject(indicatorArray) {
+        if (!Array.isArray(indicatorArray)) {
+            throw new Error('输入必须是数组');
+        }
+        
+        if (indicatorArray.length !== this.allThird.length) {
+            throw new Error(`数组长度错误：期望${this.allThird.length}个元素，实际${indicatorArray.length}个`);
+        }
+
+        const result = {};
+        this.allThird.forEach((indicator, index) => {
+            const propertyName = this.indicatorPropertyMap[indicator];
+            result[propertyName] = indicatorArray[index];
+        });
+        
+        return result;
+    }
+
+    // 将对象格式的指标数据转换为数组格式
+    objectToArray(indicatorObject) {
+        if (!indicatorObject || typeof indicatorObject !== 'object') {
+            throw new Error('输入必须是对象');
+        }
+
+        return this.allThird.map(indicator => {
+            const propertyName = this.indicatorPropertyMap[indicator];
+            return indicatorObject[propertyName] || 0;
+        });
+    }
+
+    // 验证对象格式的指标数据
+    validateIndicatorObject(indicatorObject) {
+        if (!indicatorObject || typeof indicatorObject !== 'object') {
+            throw new Error('指标数据必须是对象');
+        }
+
+        const missingProperties = [];
+        const invalidProperties = [];
+
+        this.allProperties.forEach(property => {
+            if (!(property in indicatorObject)) {
+                missingProperties.push(property);
+            } else {
+                const value = indicatorObject[property];
+                if (typeof value !== 'number' || isNaN(value)) {
+                    invalidProperties.push(`${property}: ${value}`);
+                }
+            }
+        });
+
+        if (missingProperties.length > 0) {
+            throw new Error(`缺少指标属性: ${missingProperties.join(', ')}`);
+        }
+
+        if (invalidProperties.length > 0) {
+            throw new Error(`无效的指标值: ${invalidProperties.join(', ')}`);
+        }
+
+        return true;
     }
 }
 

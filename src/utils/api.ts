@@ -10,6 +10,7 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   };
 
   const config: RequestInit = {
+    credentials: 'include',
     ...options,
     headers: {
       ...defaultHeaders,
@@ -79,7 +80,7 @@ export interface IP {
   id: string;
   name: string;
   group: string;
-  indicators: number[];
+  indicators: Record<string, number>;
   createdAt: string;
   updatedAt: string;
 }
@@ -116,6 +117,9 @@ export interface IndicatorStructure {
   firstToSecond: Record<string, string[]>;
   secondToThird: Record<string, string[]>;
   allThird: string[];
+  indicatorPropertyMap: Record<string, string>;
+  propertyIndicatorMap: Record<string, string>;
+  allProperties: string[];
 }
 
 // API客户端类
@@ -329,6 +333,7 @@ export const ipApi = {
     
     return fetch(`${API_BASE_URL}/api/ip/import-excel`, {
       method: 'POST',
+      credentials: 'include',
       body: formData,
     }).then(async response => {
       const data = await response.json();

@@ -401,7 +401,10 @@ const indicatorStructure = ref<IndicatorStructure>({
   secondLevel: [],
   firstToSecond: {},
   secondToThird: {},
-  allThird: []
+  allThird: [],
+  indicatorPropertyMap: {},
+  propertyIndicatorMap: {},
+  allProperties: []
 });
 
 // 筛选条件
@@ -610,9 +613,14 @@ const saveIP = async () => {
     loading.value = true;
     loadingText.value = editMode.value ? '更新IP中...' : '添加IP中...';
     
-    const indicators = filteredThirdIndicators.value.map(indicator => 
-      indicatorValues.value[indicator] || 0
-    );
+    // 将指标值从中文名称映射为对象格式
+    const indicators: Record<string, number> = {};
+    filteredThirdIndicators.value.forEach(indicator => {
+      const propertyName = getPropertyNameForIndicator(indicator);
+      if (propertyName) {
+        indicators[propertyName] = indicatorValues.value[indicator] || 0;
+      }
+    });
     
     const ipData = {
       name: ipForm.name.trim(),
@@ -643,10 +651,37 @@ const saveIP = async () => {
 const selectIP = (ip: IP) => {
   selectedIP.value = ip;
   
-  // 更新指标值
-  filteredThirdIndicators.value.forEach((indicator, index) => {
-    indicatorValues.value[indicator] = ip.indicators[index] || 0;
-  });
+  // 清空现有的指标值
+  initializeIndicatorValues();
+  
+  // 如果indicators是对象格式，直接从对象中获取值
+  if (ip.indicators && typeof ip.indicators === 'object') {
+    // 遍历所有指标，从IP的indicators对象中获取对应的值
+    filteredThirdIndicators.value.forEach(indicator => {
+      // 需要将中文指标名转换为属性名
+      const propertyName = getPropertyNameForIndicator(indicator);
+      if (propertyName && ip.indicators[propertyName] !== undefined) {
+        indicatorValues.value[indicator] = ip.indicators[propertyName];
+      }
+    });
+  }
+  // 如果indicators仍然是数组格式（向后兼容）
+  else if (Array.isArray(ip.indicators)) {
+    filteredThirdIndicators.value.forEach((indicator, index) => {
+      indicatorValues.value[indicator] = ip.indicators[index] || 0;
+    });
+  }
+};
+
+// 辅助函数：将中文指标名转换为属性名
+const getPropertyNameForIndicator = (indicator: string): string | null => {
+  // 使用从后端获取的映射关系
+  if (indicatorStructure.value.indicatorPropertyMap) {
+    return indicatorStructure.value.indicatorPropertyMap[indicator] || null;
+  }
+  
+  // 如果映射关系未加载，返回null
+  return null;
 };
 
 const performComprehensiveAnalysis = async () => {

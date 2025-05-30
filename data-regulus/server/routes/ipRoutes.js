@@ -5,6 +5,10 @@ const ipEvaluationService = require('../services/ipEvaluationService');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const path = require('path');
+const { authenticate } = require('../middleware/auth');
+
+// 应用认证中间件到所有需要用户认证的路由
+router.use(['/ips', '/groups', '/evaluate', '/clustering', '/history', '/statistics', '/clear-all', '/export', '/import', '/import-excel', '/test-data'], authenticate);
 
 // 获取指标层级信息
 router.get('/indicators', (req, res) => {
@@ -16,7 +20,10 @@ router.get('/indicators', (req, res) => {
                 secondLevel: ipEvaluationService.secondLevel,
                 firstToSecond: ipEvaluationService.firstToSecond,
                 secondToThird: ipEvaluationService.secondToThird,
-                allThird: ipEvaluationService.allThird
+                allThird: ipEvaluationService.allThird,
+                indicatorPropertyMap: ipEvaluationService.indicatorPropertyMap,
+                propertyIndicatorMap: ipEvaluationService.propertyIndicatorMap,
+                allProperties: ipEvaluationService.allProperties
             }
         });
     } catch (error) {
@@ -49,10 +56,11 @@ router.post('/indicators/filtered', (req, res) => {
 });
 
 // 获取所有IP
-router.get('/ips', (req, res) => {
+router.get('/ips', async (req, res) => {
     try {
         const { group } = req.query;
-        const ips = group ? ipModel.getIPsByGroup(group) : ipModel.getAllIPs();
+        const userId = req.user._id || req.user.id;
+        const ips = group ? await ipModel.getIPsByGroup(group, userId) : await ipModel.getAllIPs(userId);
         
         res.json({
             success: true,
@@ -67,9 +75,10 @@ router.get('/ips', (req, res) => {
 });
 
 // 添加IP
-router.post('/ips', (req, res) => {
+router.post('/ips', async (req, res) => {
     try {
-        const newIP = ipModel.addIP(req.body);
+        const userId = req.user._id || req.user.id;
+        const newIP = await ipModel.addIP(req.body, userId);
         
         res.status(201).json({
             success: true,
@@ -85,9 +94,10 @@ router.post('/ips', (req, res) => {
 });
 
 // 更新IP
-router.put('/ips/:id', (req, res) => {
+router.put('/ips/:id', async (req, res) => {
     try {
-        const updatedIP = ipModel.updateIP(req.params.id, req.body);
+        const userId = req.user._id || req.user.id;
+        const updatedIP = await ipModel.updateIP(req.params.id, req.body, userId);
         
         res.json({
             success: true,
@@ -103,9 +113,10 @@ router.put('/ips/:id', (req, res) => {
 });
 
 // 删除IP
-router.delete('/ips/:id', (req, res) => {
+router.delete('/ips/:id', async (req, res) => {
     try {
-        const deletedIP = ipModel.deleteIP(req.params.id);
+        const userId = req.user._id || req.user.id;
+        const deletedIP = await ipModel.deleteIP(req.params.id, userId);
         
         res.json({
             success: true,
@@ -121,7 +132,7 @@ router.delete('/ips/:id', (req, res) => {
 });
 
 // 批量添加IP
-router.post('/ips/batch', (req, res) => {
+router.post('/ips/batch', async (req, res) => {
     try {
         const { ips } = req.body;
         if (!Array.isArray(ips)) {
@@ -131,7 +142,8 @@ router.post('/ips/batch', (req, res) => {
             });
         }
 
-        const result = ipModel.addBatchIPs(ips);
+        const userId = req.user._id || req.user.id;
+        const result = await ipModel.addBatchIPs(ips, userId);
         
         res.status(201).json({
             success: true,
@@ -147,9 +159,10 @@ router.post('/ips/batch', (req, res) => {
 });
 
 // 获取所有组别
-router.get('/groups', (req, res) => {
+router.get('/groups', async (req, res) => {
     try {
-        const groups = ipModel.getAllGroups();
+        const userId = req.user._id || req.user.id;
+        const groups = await ipModel.getAllGroups(userId);
         
         res.json({
             success: true,
@@ -164,12 +177,13 @@ router.get('/groups', (req, res) => {
 });
 
 // IP评估
-router.post('/evaluate', (req, res) => {
+router.post('/evaluate', async (req, res) => {
     try {
         const { group = '全部', selectedIndicators = null } = req.body;
+        const userId = req.user._id || req.user.id;
         
         // 获取要评估的IP数据
-        const ips = ipModel.getIPsByGroup(group);
+        const ips = await ipModel.getIPsByGroup(group, userId);
         
         if (ips.length < 2) {
             return res.status(400).json({
@@ -182,7 +196,7 @@ router.post('/evaluate', (req, res) => {
         const evaluation = ipEvaluationService.evaluateIPs(ips, selectedIndicators);
         
         // 保存评估历史
-        const historyRecord = ipModel.saveEvaluationHistory(evaluation);
+        const historyRecord = await ipModel.saveEvaluationHistory(evaluation, userId);
         
         res.json({
             success: true,
@@ -201,9 +215,10 @@ router.post('/evaluate', (req, res) => {
 });
 
 // 评估选中的IP
-router.post('/evaluate-selected', (req, res) => {
+router.post('/evaluate-selected', async (req, res) => {
     try {
         const { selectedIPs = [], selectedIndicators = null } = req.body;
+        const userId = req.user._id || req.user.id;
         
         if (!selectedIPs || selectedIPs.length < 2) {
             return res.status(400).json({
@@ -216,7 +231,7 @@ router.post('/evaluate-selected', (req, res) => {
         const evaluation = ipEvaluationService.evaluateIPs(selectedIPs, selectedIndicators);
         
         // 保存评估历史
-        const historyRecord = ipModel.saveEvaluationHistory(evaluation);
+        const historyRecord = await ipModel.saveEvaluationHistory(evaluation, userId);
         
         res.json({
             success: true,
@@ -235,12 +250,13 @@ router.post('/evaluate-selected', (req, res) => {
 });
 
 // 聚类分析
-router.post('/clustering', (req, res) => {
+router.post('/clustering', async (req, res) => {
     try {
         const { group = '全部', clusterCount = 2 } = req.body;
+        const userId = req.user._id || req.user.id;
         
         // 获取要分析的IP数据
-        const ips = ipModel.getIPsByGroup(group);
+        const ips = await ipModel.getIPsByGroup(group, userId);
         
         if (ips.length < clusterCount) {
             return res.status(400).json({
@@ -275,9 +291,10 @@ router.post('/clustering', (req, res) => {
 });
 
 // 获取评估历史
-router.get('/history', (req, res) => {
+router.get('/history', async (req, res) => {
     try {
-        const history = ipModel.getEvaluationHistory();
+        const userId = req.user._id || req.user.id;
+        const history = await ipModel.getEvaluationHistory(userId);
         
         res.json({
             success: true,
@@ -292,9 +309,10 @@ router.get('/history', (req, res) => {
 });
 
 // 获取特定历史记录
-router.get('/history/:id', (req, res) => {
+router.get('/history/:id', async (req, res) => {
     try {
-        const historyRecord = ipModel.getHistoryById(req.params.id);
+        const userId = req.user._id || req.user.id;
+        const historyRecord = await ipModel.getHistoryById(req.params.id, userId);
         
         if (!historyRecord) {
             return res.status(404).json({
@@ -316,12 +334,13 @@ router.get('/history/:id', (req, res) => {
 });
 
 // 生成测试数据
-router.post('/test-data', (req, res) => {
+router.post('/test-data', async (req, res) => {
     try {
         const { count = 10 } = req.body;
+        const userId = req.user._id || req.user.id;
         const testIPs = ipEvaluationService.generateTestData(count);
         
-        const result = ipModel.addBatchIPs(testIPs);
+        const result = await ipModel.addBatchIPs(testIPs, userId);
         
         res.status(201).json({
             success: true,
@@ -337,9 +356,10 @@ router.post('/test-data', (req, res) => {
 });
 
 // 获取统计信息
-router.get('/statistics', (req, res) => {
+router.get('/statistics', async (req, res) => {
     try {
-        const stats = ipModel.getStatistics();
+        const userId = req.user._id || req.user.id;
+        const stats = await ipModel.getStatistics(userId);
         
         res.json({
             success: true,
@@ -354,9 +374,9 @@ router.get('/statistics', (req, res) => {
 });
 
 // 导出数据
-router.get('/export', (req, res) => {
+router.get('/export', async (req, res) => {
     try {
-        const data = ipModel.exportData();
+        const data = await ipModel.exportData();
         
         res.setHeader('Content-Disposition', 'attachment; filename=ip-evaluation-data.json');
         res.setHeader('Content-Type', 'application/json');
@@ -388,7 +408,7 @@ const upload = multer({
 });
 
 // Excel导入数据功能
-router.post('/import-excel', upload.single('file'), (req, res) => {
+router.post('/import-excel', upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({
@@ -429,7 +449,7 @@ router.post('/import-excel', upload.single('file'), (req, res) => {
             const parsedData = parseExpertScoreData(excelData);
             
             // 导入解析后的数据
-            const result = importExpertScoreData(parsedData);
+            const result = await importExpertScoreData(parsedData, req.user._id || req.user.id);
             
             return res.json({
                 success: true,
@@ -536,7 +556,7 @@ function parseExpertScoreData(excelData) {
         console.log(`创建IP: ${ipName}, 组别: ${groupName}`);
         
         // 收集该专家的所有指标评分
-        const expertScores = Array(allSystemIndicators.length).fill(0);
+        const expertScores = {};
         
         // 根据指标名称匹配分数
         excelData.forEach(row => {
@@ -544,13 +564,23 @@ function parseExpertScoreData(excelData) {
             const score = parseFloat(row[expertColumn]);
             
             if (indicatorName && !isNaN(score)) {
-                // 在系统指标中查找匹配的位置
+                // 在系统指标中查找匹配的位置，然后转换为属性名
                 const systemIndex = allSystemIndicators.indexOf(indicatorName);
                 if (systemIndex !== -1) {
-                    expertScores[systemIndex] = score;
+                    const propertyName = ipEvaluationService.indicatorPropertyMap[indicatorName];
+                    if (propertyName) {
+                        expertScores[propertyName] = score;
+                    }
                 } else {
                     console.warn(`指标 "${indicatorName}" 在系统中未找到`);
                 }
+            }
+        });
+
+        // 确保所有指标都有值，缺失的设为0
+        ipEvaluationService.getAllProperties().forEach(property => {
+            if (!(property in expertScores)) {
+                expertScores[property] = 0;
             }
         });
 
@@ -570,34 +600,35 @@ function parseExpertScoreData(excelData) {
 }
 
 // 导入专家评分数据
-function importExpertScoreData(parsedData) {
+async function importExpertScoreData(parsedData, userId) {
     const addedIPs = [];
     const errors = [];
 
-    parsedData.ips.forEach((ipData, index) => {
+    for (let i = 0; i < parsedData.ips.length; i++) {
+        const ipData = parsedData.ips[i];
         try {
             // 验证IP数据
             ipModel.validateIP(ipData);
             
-            // 检查是否已存在同名IP
-            const existingIP = ipModel.getIPByName(ipData.name);
-            if (existingIP) {
+            // 检查是否已存在同名IP和组别的组合
+            const existingIP = await ipModel.getIPByName(ipData.name, userId);
+            if (existingIP && existingIP.group === ipData.group) {
                 // 更新现有IP
-                ipModel.updateIP(existingIP.id, ipData);
+                await ipModel.updateIP(existingIP.id, ipData, userId);
                 addedIPs.push({ ...ipData, id: existingIP.id, action: 'updated' });
             } else {
                 // 添加新IP
-                const newIP = ipModel.addIP(ipData);
+                const newIP = await ipModel.addIP(ipData, userId);
                 addedIPs.push({ ...newIP, action: 'added' });
             }
         } catch (error) {
             errors.push({
-                index: index + 1,
+                index: i + 1,
                 name: ipData.name,
                 error: error.message
             });
         }
-    });
+    }
 
     return {
         ipsCount: addedIPs.length,
@@ -612,9 +643,10 @@ function importExpertScoreData(parsedData) {
 }
 
 // 清空所有数据
-router.delete('/clear-all', (req, res) => {
+router.delete('/clear-all', async (req, res) => {
     try {
-        ipModel.clearAll();
+        const userId = req.user._id || req.user.id;
+        await ipModel.clearAll(userId);
         
         res.json({
             success: true,
@@ -629,9 +661,9 @@ router.delete('/clear-all', (req, res) => {
 });
 
 // 导入数据
-router.post('/import', (req, res) => {
+router.post('/import', async (req, res) => {
     try {
-        const result = ipModel.importData(req.body);
+        const result = await ipModel.importData(req.body);
         
         res.json({
             success: true,

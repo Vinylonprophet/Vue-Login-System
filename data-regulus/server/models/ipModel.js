@@ -1,9 +1,40 @@
-// IP数据模型
+const { client } = require('../config/database');
+const { ObjectId } = require('mongodb');
+const ipEvaluationService = require('../services/ipEvaluationService');
+
+// IP数据模型 - 使用MongoDB持久化存储
 class IPModel {
     constructor() {
-        this.ips = [];
-        this.history = [];
-        this.idCounter = 0; // 添加计数器确保ID唯一
+        this.db = null;
+        this.ipsCollection = null;
+        this.historyCollection = null;
+        this.idCounter = 0;
+        this.initDB();
+    }
+
+    // 初始化数据库连接
+    async initDB() {
+        try {
+            this.db = client.db('ip_evaluation_system');
+            this.ipsCollection = this.db.collection('ips');
+            this.historyCollection = this.db.collection('evaluation_history');
+            
+            // 创建索引
+            await this.ipsCollection.createIndex({ name: 1, group: 1 }, { unique: true });
+            await this.ipsCollection.createIndex({ group: 1 });
+            await this.historyCollection.createIndex({ timestamp: -1 });
+            
+            console.log('IP数据库模型初始化成功');
+        } catch (error) {
+            console.error('IP数据库模型初始化失败:', error);
+        }
+    }
+
+    // 确保数据库连接
+    async ensureDB() {
+        if (!this.db) {
+            await this.initDB();
+        }
     }
 
     // 生成唯一ID的方法
@@ -25,122 +56,238 @@ class IPModel {
             throw new Error('IP组别必须是非空字符串');
         }
 
-        if (!Array.isArray(ip.indicators)) {
-            throw new Error('IP指标必须是数组');
+        if (!ip.indicators) {
+            throw new Error('IP必须包含indicators字段');
         }
 
-        if (ip.indicators.some(indicator => typeof indicator !== 'number' || isNaN(indicator))) {
-            throw new Error('所有指标值必须是有效数字');
+        // 支持数组格式（向后兼容）
+        if (Array.isArray(ip.indicators)) {
+            if (ip.indicators.length !== ipEvaluationService.getAllThirdIndicators().length) {
+                throw new Error(`数组格式indicators长度错误：期望${ipEvaluationService.getAllThirdIndicators().length}个，实际${ip.indicators.length}个`);
+            }
+            if (ip.indicators.some(indicator => typeof indicator !== 'number' || isNaN(indicator))) {
+                throw new Error('所有指标值必须是有效数字');
+            }
+        } 
+        // 支持对象格式（新格式）
+        else if (typeof ip.indicators === 'object') {
+            try {
+                ipEvaluationService.validateIndicatorObject(ip.indicators);
+            } catch (error) {
+                throw new Error(`对象格式indicators验证失败：${error.message}`);
+            }
+        } 
+        else {
+            throw new Error('indicators必须是数组或对象格式');
         }
 
         return true;
     }
 
+    // 标准化指标格式 - 统一转换为对象格式
+    normalizeIndicators(indicators) {
+        if (Array.isArray(indicators)) {
+            return ipEvaluationService.arrayToObject(indicators);
+        } else if (typeof indicators === 'object') {
+            // 验证对象格式
+            ipEvaluationService.validateIndicatorObject(indicators);
+            return indicators;
+        } else {
+            throw new Error('indicators必须是数组或对象格式');
+        }
+    }
+
+    // 获取兼容格式的指标数据 - 返回数组格式供现有算法使用
+    getCompatibleIndicators(indicators) {
+        if (Array.isArray(indicators)) {
+            return indicators;
+        } else if (typeof indicators === 'object') {
+            return ipEvaluationService.objectToArray(indicators);
+        } else {
+            throw new Error('indicators必须是数组或对象格式');
+        }
+    }
+
     // 添加IP
-    addIP(ip) {
+    async addIP(ip, userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
         this.validateIP(ip);
         
-        // 检查名称是否已存在
-        if (this.ips.some(existingIP => existingIP.name === ip.name)) {
-            throw new Error(`IP名称 "${ip.name}" 已存在`);
+        // 检查名称和组别的组合是否已存在（仅在当前用户的数据中）
+        const existingIP = await this.ipsCollection.findOne({ 
+            name: ip.name, 
+            group: ip.group,
+            userId: userId
+        });
+        if (existingIP) {
+            throw new Error(`IP名称 "${ip.name}" 在组别 "${ip.group}" 中已存在`);
         }
 
         const newIP = {
             id: this.generateUniqueId(),
             name: ip.name,
             group: ip.group,
-            indicators: [...ip.indicators],
+            indicators: this.normalizeIndicators(ip.indicators),
+            userId: userId,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
 
-        this.ips.push(newIP);
-        return newIP;
+        const result = await this.ipsCollection.insertOne(newIP);
+        return { ...newIP, _id: undefined };
     }
 
     // 更新IP
-    updateIP(id, updates) {
-        const index = this.ips.findIndex(ip => ip.id === id);
-        if (index === -1) {
-            throw new Error('未找到指定的IP');
+    async updateIP(id, updates, userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
+        const existingIP = await this.ipsCollection.findOne({ id, userId });
+        if (!existingIP) {
+            throw new Error('未找到指定的IP或您没有权限修改');
         }
 
         const updatedIP = {
-            ...this.ips[index],
+            ...existingIP,
             ...updates,
+            userId: userId, // 确保userId不被覆盖
             updatedAt: new Date().toISOString()
         };
 
         this.validateIP(updatedIP);
-        this.ips[index] = updatedIP;
-        return updatedIP;
+        
+        await this.ipsCollection.updateOne(
+            { id, userId },
+            { $set: updatedIP }
+        );
+        
+        return { ...updatedIP, _id: undefined };
     }
 
     // 删除IP
-    deleteIP(id) {
-        const index = this.ips.findIndex(ip => ip.id === id);
-        if (index === -1) {
-            throw new Error('未找到指定的IP');
+    async deleteIP(id, userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
+        const deletedIP = await this.ipsCollection.findOne({ id, userId });
+        if (!deletedIP) {
+            throw new Error('未找到指定的IP或您没有权限删除');
         }
 
-        const deletedIP = this.ips.splice(index, 1)[0];
-        return deletedIP;
+        await this.ipsCollection.deleteOne({ id, userId });
+        return { ...deletedIP, _id: undefined };
     }
 
-    // 获取所有IP
-    getAllIPs() {
-        return [...this.ips];
+    // 获取所有IP（仅当前用户）
+    async getAllIPs(userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
+        const ips = await this.ipsCollection.find({ userId }).toArray();
+        return ips.map(ip => ({ ...ip, _id: undefined }));
     }
 
-    // 根据组别筛选IP
-    getIPsByGroup(group) {
+    // 根据组别筛选IP（仅当前用户）
+    async getIPsByGroup(group, userId) {
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
         if (group === '全部') {
-            return this.getAllIPs();
+            return await this.getAllIPs(userId);
         }
-        return this.ips.filter(ip => ip.group === group);
+        
+        await this.ensureDB();
+        const ips = await this.ipsCollection.find({ group, userId }).toArray();
+        return ips.map(ip => ({ ...ip, _id: undefined }));
     }
 
-    // 获取所有组别
-    getAllGroups() {
-        const groups = [...new Set(this.ips.map(ip => ip.group))];
+    // 获取所有组别（仅当前用户）
+    async getAllGroups(userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
+        const groups = await this.ipsCollection.distinct('group', { userId });
         return ['全部', ...groups.sort()];
     }
 
-    // 根据ID获取IP
-    getIPById(id) {
-        return this.ips.find(ip => ip.id === id);
+    // 根据ID获取IP（仅当前用户）
+    async getIPById(id, userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
+        const ip = await this.ipsCollection.findOne({ id, userId });
+        return ip ? { ...ip, _id: undefined } : null;
     }
 
-    // 根据名称获取IP
-    getIPByName(name) {
-        return this.ips.find(ip => ip.name === name);
+    // 根据名称获取IP（仅当前用户）
+    async getIPByName(name, userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
+        const ip = await this.ipsCollection.findOne({ name, userId });
+        return ip ? { ...ip, _id: undefined } : null;
     }
 
     // 批量添加IP
-    addBatchIPs(ips) {
+    async addBatchIPs(ips, userId) {
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
         const addedIPs = [];
         const errors = [];
 
-        ips.forEach((ip, index) => {
+        for (let i = 0; i < ips.length; i++) {
             try {
-                const newIP = this.addIP(ip);
+                const newIP = await this.addIP(ips[i], userId);
                 addedIPs.push(newIP);
             } catch (error) {
                 errors.push({
-                    index,
-                    ip,
+                    index: i,
+                    ip: ips[i],
                     error: error.message
                 });
             }
-        });
+        }
 
         return { addedIPs, errors };
     }
 
     // 保存评估历史
-    saveEvaluationHistory(evaluation) {
+    async saveEvaluationHistory(evaluation, userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
         const historyRecord = {
             id: this.generateUniqueId(),
+            userId: userId,
             timestamp: new Date().toISOString(),
             ipsCount: evaluation.evaluation.length,
             evaluation: evaluation.evaluation,
@@ -148,46 +295,83 @@ class IPModel {
             fitnessHistory: evaluation.fitnessHistory
         };
 
-        this.history.push(historyRecord);
+        await this.historyCollection.insertOne(historyRecord);
         
-        // 限制历史记录数量（保留最近20条）
-        if (this.history.length > 20) {
-            this.history = this.history.slice(-20);
+        // 清理旧记录（保留最近50条，仅当前用户）
+        const totalCount = await this.historyCollection.countDocuments({ userId });
+        if (totalCount > 50) {
+            const oldRecords = await this.historyCollection
+                .find({ userId })
+                .sort({ timestamp: 1 })
+                .limit(totalCount - 50)
+                .toArray();
+            
+            const idsToDelete = oldRecords.map(record => record._id);
+            await this.historyCollection.deleteMany({ _id: { $in: idsToDelete } });
         }
 
-        return historyRecord;
+        return { ...historyRecord, _id: undefined };
     }
 
-    // 获取评估历史
-    getEvaluationHistory() {
-        return [...this.history].reverse(); // 最新的在前面
+    // 获取评估历史（仅当前用户）
+    async getEvaluationHistory(userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
+        const history = await this.historyCollection
+            .find({ userId })
+            .sort({ timestamp: -1 })
+            .toArray();
+        return history.map(record => ({ ...record, _id: undefined }));
     }
 
-    // 根据ID获取历史记录
-    getHistoryById(id) {
-        return this.history.find(record => record.id === id);
+    // 根据ID获取历史记录（仅当前用户）
+    async getHistoryById(id, userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
+        const record = await this.historyCollection.findOne({ id, userId });
+        return record ? { ...record, _id: undefined } : null;
     }
 
-    // 清空所有数据
-    clearAll() {
-        this.ips = [];
-        this.history = [];
+    // 清空所有数据（仅当前用户）
+    async clearAll(userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
+        await this.ipsCollection.deleteMany({ userId });
+        await this.historyCollection.deleteMany({ userId });
     }
 
     // 导出数据
-    exportData() {
+    async exportData() {
+        const ips = await this.getAllIPs();
+        const history = await this.getEvaluationHistory();
+        
         return {
-            ips: this.ips,
-            history: this.history,
+            ips,
+            history,
             exportedAt: new Date().toISOString()
         };
     }
 
     // 导入数据
-    importData(data) {
+    async importData(data) {
         if (!data || typeof data !== 'object') {
             throw new Error('导入数据格式无效');
         }
+
+        let ipsCount = 0;
+        let historyCount = 0;
 
         if (Array.isArray(data.ips)) {
             // 验证所有IP数据
@@ -199,34 +383,63 @@ class IPModel {
                 }
             });
 
-            this.ips = [...data.ips];
+            // 清空现有IP数据并导入新数据
+            await this.ensureDB();
+            await this.ipsCollection.deleteMany({});
+            
+            if (data.ips.length > 0) {
+                await this.ipsCollection.insertMany(data.ips.map(ip => ({
+                    ...ip,
+                    indicators: this.normalizeIndicators(ip.indicators)
+                })));
+            }
+            ipsCount = data.ips.length;
         }
 
         if (Array.isArray(data.history)) {
-            this.history = [...data.history];
+            // 清空现有历史数据并导入新数据
+            await this.ensureDB();
+            await this.historyCollection.deleteMany({});
+            
+            if (data.history.length > 0) {
+                await this.historyCollection.insertMany(data.history);
+            }
+            historyCount = data.history.length;
         }
 
         return {
-            ipsCount: this.ips.length,
-            historyCount: this.history.length
+            ipsCount,
+            historyCount
         };
     }
 
-    // 获取统计信息
-    getStatistics() {
-        const groups = this.getAllGroups().slice(1); // 排除"全部"选项
-        const groupStats = groups.map(group => ({
-            group,
-            count: this.getIPsByGroup(group).length
-        }));
+    // 获取统计信息（仅当前用户）
+    async getStatistics(userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
+        const totalIPs = await this.ipsCollection.countDocuments({ userId });
+        const groups = await this.ipsCollection.distinct('group', { userId });
+        
+        const groupStats = [];
+        for (const group of groups) {
+            const count = await this.ipsCollection.countDocuments({ group, userId });
+            groupStats.push({ group, count });
+        }
+
+        const totalEvaluations = await this.historyCollection.countDocuments({ userId });
+        const lastEvaluation = await this.historyCollection
+            .findOne({ userId }, { sort: { timestamp: -1 } });
 
         return {
-            totalIPs: this.ips.length,
+            totalIPs,
             totalGroups: groups.length,
             groupStats,
-            totalEvaluations: this.history.length,
-            lastEvaluationAt: this.history.length > 0 ? 
-                this.history[this.history.length - 1].timestamp : null
+            totalEvaluations,
+            lastEvaluationAt: lastEvaluation ? lastEvaluation.timestamp : null
         };
     }
 }
