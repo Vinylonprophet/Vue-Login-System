@@ -197,6 +197,40 @@ router.post('/evaluate', (req, res) => {
     }
 });
 
+// 评估选中的IP
+router.post('/evaluate-selected', (req, res) => {
+    try {
+        const { selectedIPs = [], selectedIndicators = null } = req.body;
+        
+        if (!selectedIPs || selectedIPs.length < 2) {
+            return res.status(400).json({
+                success: false,
+                message: '请至少选择2个IP进行评估'
+            });
+        }
+
+        // 执行评估
+        const evaluation = ipEvaluationService.evaluateIPs(selectedIPs, selectedIndicators);
+        
+        // 保存评估历史
+        const historyRecord = ipModel.saveEvaluationHistory(evaluation);
+        
+        res.json({
+            success: true,
+            data: {
+                ...evaluation,
+                historyId: historyRecord.id
+            },
+            message: `评估完成，已分析${selectedIPs.length}个选中的IP`
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
 // 聚类分析
 router.post('/clustering', (req, res) => {
     try {

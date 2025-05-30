@@ -106,6 +106,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiClient, type RegisterRequest } from '../utils/api'
+import { toast } from '../utils/toast'
 
 const router = useRouter()
 
@@ -190,53 +191,68 @@ const toggleConfirmPassword = () => {
 }
 
 const handleRegister = async () => {
-  if (!validateForm()) {
-    if (!formData.agree) {
-      alert('请同意服务条款和隐私政策')
-    }
-    return
+  // 验证必填字段
+  if (!formData.email.trim()) {
+    toast.warning('请输入邮箱');
+    return;
   }
   
-  isLoading.value = true
+  if (!formData.name.trim()) {
+    toast.warning('请输入用户名');
+    return;
+  }
   
+  if (!formData.password.trim()) {
+    toast.warning('请输入密码');
+    return;
+  }
+  
+  if (!formData.confirmPassword.trim()) {
+    toast.warning('请确认密码');
+    return;
+  }
+  
+  if (formData.password !== formData.confirmPassword) {
+    toast.warning('两次输入的密码不一致');
+    return;
+  }
+  
+  if (!formData.agree) {
+    toast.warning('请同意服务条款和隐私政策');
+    return;
+  }
+
   try {
+    await toast.withLoading(
+      async () => {
     const registerData: RegisterRequest = {
       username: formData.name,
       email: formData.email,
       password: formData.password
-    }
+        };
     
-    const response = await apiClient.register(registerData)
+        const response = await apiClient.register(registerData);
     
     if (response.success) {
-      console.log('注册成功:', response.user)
-      alert(`注册成功！欢迎，${response.user?.username}！🎉`)
-      
-      // 注册成功后跳转到登录页面
-      router.push('/login')
+          // 注册成功，跳转到登录页
+          router.push('/login');
     } else {
-      throw new Error(response.message || '注册失败')
+          throw new Error(response.message || '注册失败');
+        }
+      },
+      {
+        loadingMessage: '正在注册账户...',
+        successMessage: `注册成功！欢迎，${formData.name}！🎉`,
+        minDelay: 1000
     }
+    );
     
   } catch (error: any) {
-    console.error('注册失败:', error)
-    
-    // 根据错误类型显示不同的消息
-    let errorMessage = '注册失败，请重试'
-    
-    if (error.message.includes('邮箱已被注册') || error.message.includes('用户已存在')) {
-      errorMessage = '该邮箱已被注册，请使用其他邮箱或直接登录'
-    } else if (error.message.includes('网络')) {
-      errorMessage = '网络连接失败，请检查网络后重试'
-    } else if (error.message) {
-      errorMessage = error.message
-    }
-    
-    alert(errorMessage)
-  } finally {
-    isLoading.value = false
+    console.error('注册失败:', error);
+    const errorMessage = error?.message || '注册失败，请检查输入信息';
+    toast.fail(errorMessage);
   }
-}
+};
 </script>
 
 <style scoped>

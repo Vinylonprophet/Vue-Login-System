@@ -349,6 +349,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick } from 'vue';
 import { ipApi, pythonMLApi, type IP, type EvaluationResult, type ClusteringResult, type IndicatorStructure } from '../utils/api';
+import { toast } from '../utils/toast';
 import {
   Chart,
   CategoryScale,
@@ -654,188 +655,236 @@ const performComprehensiveAnalysis = async () => {
     return;
   }
   
+  // 临时存储分析结果，不立即设置到响应式变量
+  let tempEvaluationResult: any = null;
+  let tempNeuralNetworkResult: any = null;
+  let tempShapResult: any = null;
+  let tempPcaResult: any = null;
+  let tempAdvancedClusterResult: any = null;
+  let tempAdvancedClusterImage: string = '';
+  
   try {
-    loading.value = true;
-    loadingText.value = '全面分析中...';
+    // 使用toast的withAnalysis方法，确保加载动画随机显示10-20秒
+    await toast.withAnalysis(
+      async () => {
+        loading.value = true;
+        loadingText.value = '全面分析中...';
+        
+        // 清空所有之前的ML分析结果，避免显示旧数据造成误解
+        evaluationResult.value = null;
+        neuralNetworkResult.value = null;
+        shapResult.value = null;
+        pcaResult.value = null;
+        advancedClusterResult.value = null;
+        advancedClusterImage.value = '';
+        
+        // 添加调试日志
+        addLog('=== 开始全面分析 ===');
+        addLog(`当前IP数量: ${ips.value.length}`);
+        addLog(`选择的组别: ${selectedGroup.value}`);
+        addLog(`筛选的指标数量: ${filteredThirdIndicators.value.length}`);
+        addLog(`筛选的指标: ${filteredThirdIndicators.value.join(', ')}`);
+        
+        // 步骤1: 基础评估
+        addLog('🔄 进行基础IP评估...');
+        const response = await ipApi.evaluate(selectedGroup.value, filteredThirdIndicators.value);
+        if (response.data) {
+          tempEvaluationResult = response.data;
+          
+          addLog('✅ 基础评估完成');
+          addLog(`使用的指标数量: ${response.data.selectedIndicators ? response.data.selectedIndicators.length : '全部32个'}`);
+          addLog(`AHP权重: ${response.data.weights.map(w => w.toFixed(3)).join(', ')}`);
+          addLog('IP分析结果:');
+          response.data.evaluation.forEach(result => {
+            addLog(`${result.rank}. ${result.name}: ${result.score.toFixed(2)} (±${result.error.toFixed(2)})`);
+          });
+          
+          // 注意：这里不立即更新IP列表中的评分，不调用renderCharts()
+        }
+
+        // 步骤2: 神经网络训练
+        if (ips.value.length >= 5) {
+          addLog('🔄 开始神经网络训练...');
+          loadingText.value = '神经网络训练中...';
+          try {
+            // 获取当前使用的指标名称
+            const currentFeatureNames = filteredThirdIndicators.value.length > 0 
+              ? filteredThirdIndicators.value 
+              : indicatorStructure.value.allThird;
+            const nnResponse = await pythonMLApi.trainNeuralNetwork(ips.value, currentFeatureNames);
+            if (nnResponse.success && nnResponse.data) {
+              tempNeuralNetworkResult = nnResponse.data;
+              addLog('✅ 神经网络训练完成');
+            } else {
+              addLog(`⚠️ 神经网络训练失败: ${nnResponse.error || '未知错误'}`);
+            }
+          } catch (error) {
+            addLog(`⚠️ 神经网络训练失败: ${error}`);
+          }
+        } else {
+          addLog('⚠️ IP数量不足5个，跳过神经网络训练');
+        }
+
+        // 步骤3: SHAP模型解释
+        if (ips.value.length >= 3) {
+          addLog('🔄 开始SHAP模型解释...');
+          loadingText.value = 'SHAP分析中...';
+          try {
+            // 获取当前使用的指标名称
+            const currentFeatureNames = filteredThirdIndicators.value.length > 0 
+              ? filteredThirdIndicators.value 
+              : indicatorStructure.value.allThird;
+            const response = await pythonMLApi.shapExplain(ips.value, currentFeatureNames);
+            if (response.success && response.data) {
+              // 保存结果
+              tempShapResult = response.data;
+              addLog('✅ SHAP模型解释完成');
+            } else {
+              addLog(`⚠️ SHAP分析失败: ${response.error || '未知错误'}`);
+            }
+          } catch (error) {
+            addLog(`⚠️ SHAP分析失败: ${error}`);
+          }
+        } else {
+          addLog('⚠️ IP数量不足3个，跳过SHAP分析');
+        }
+
+        // 步骤4: PCA降维分析
+        if (ips.value.length >= 2) {
+          addLog('🔄 开始PCA降维分析...');
+          loadingText.value = 'PCA分析中...';
+          try {
+            const pcaResponse = await pythonMLApi.pcaAnalysis(ips.value, 2);
+            if (pcaResponse.success) {
+              // 保存结果
+              tempPcaResult = pcaResponse;
+              
+              addLog('=== PCA降维分析完成 ===');
+              addLog(`降维维度: ${pcaResponse.n_components}`);
+              addLog(`总方差解释比例: ${(pcaResponse.total_variance_explained * 100).toFixed(2)}%`);
+              addLog('各主成分方差解释比例:');
+              pcaResponse.explained_variance_ratio.forEach((ratio: number, index: number) => {
+                addLog(`主成分${index + 1}: ${(ratio * 100).toFixed(2)}%`);
+              });
+              
+              addLog('PCA降维结果:');
+              pcaResponse.pca_results.forEach((result: any) => {
+                addLog(`${result.name}: [${result.coordinates.map((c: number) => c.toFixed(3)).join(', ')}]`);
+              });
+              
+              // 注意：这里不立即渲染PCA图表
+            } else {
+              addLog(`⚠️ PCA分析失败: ${pcaResponse.error}`);
+            }
+          } catch (error) {
+            addLog(`⚠️ PCA分析失败: ${error}`);
+          }
+        } else {
+          addLog('⚠️ IP数量不足2个，跳过PCA分析');
+        }
+
+        // 步骤5: 高级聚类分析
+        if (ips.value.length >= 2) {
+          addLog('🔄 开始高级聚类分析...');
+          loadingText.value = '聚类分析中...';
+          try {
+            const clusterResponse = await pythonMLApi.advancedClustering(ips.value, 2, true);
+            if (clusterResponse.success && clusterResponse.data) {
+              tempAdvancedClusterResult = clusterResponse.data;
+              
+              addLog('=== 高级聚类分析完成 ===');
+              addLog(`聚类数量: 2`);
+              addLog(`轮廓系数: ${clusterResponse.data.quality_metrics?.silhouette_score?.toFixed(4) || 'N/A (样本数不足)'}`);
+              addLog(`Calinski-Harabasz指数: ${clusterResponse.data.quality_metrics?.calinski_harabasz_score?.toFixed(4) || 'N/A (样本数不足)'}`);
+              
+              if (clusterResponse.data.pca_info?.used && clusterResponse.data.pca_info?.variance_explained) {
+                addLog(`PCA方差解释: ${clusterResponse.data.pca_info.variance_explained.map((v: number) => (v * 100).toFixed(1) + '%').join(', ')}`);
+              }
+              
+              addLog('聚类结果:');
+              clusterResponse.data.clustering_results?.forEach((result: any) => {
+                addLog(`${result.name}: 簇${result.cluster + 1} (距离质心: ${result.distance_to_centroid.toFixed(3)})`);
+              });
+              
+              addLog('凸包信息:');
+              clusterResponse.data.convex_hulls?.forEach((hull: any) => {
+                addLog(`簇${hull.cluster_id + 1}: 面积 ${hull.area.toFixed(3)}`);
+              });
+              
+              // 生成可视化图像，但不立即显示
+              try {
+                const imageResponse = await pythonMLApi.generateAdvancedPlot('clustering_with_hull', {
+                  clustering_results: clusterResponse.data.clustering_results,
+                  convex_hulls: clusterResponse.data.convex_hulls
+                });
+                if (imageResponse.success) {
+                  tempAdvancedClusterImage = imageResponse.image;
+                }
+              } catch (error) {
+                addLog('生成聚类图表失败');
+              }
+            } else {
+              addLog(`⚠️ 聚类分析失败: ${clusterResponse.error || '未知错误'}`);
+            }
+          } catch (error) {
+            addLog(`⚠️ 聚类分析失败: ${error}`);
+          }
+        } else {
+          addLog('⚠️ IP数量不足2个，跳过高级聚类分析');
+        }
+
+        addLog('=== 🎉 全面分析完成 ===');
+        addLog('💡 分析结果将在加载完成后显示...');
+        
+        // 更新统计信息
+        await loadStatistics();
+      },
+      {
+        successMessage: `✅ 分析完成！已处理 ${ips.value.length} 个IP`,
+        errorMessage: '分析失败，请检查数据后重试'
+      }
+    );
     
-    // 清空所有之前的ML分析结果，避免显示旧数据造成误解
-    neuralNetworkResult.value = null;
-    shapResult.value = null;
-    pcaResult.value = null;
-    advancedClusterResult.value = null;
-    advancedClusterImage.value = '';
+    // 只有在withAnalysis完成后（即加载动画结束后），才设置结果数据并渲染图表
+    addLog('🎨 开始显示分析结果...');
     
-    // 添加调试日志
-    addLog('=== 开始全面分析 ===');
-    addLog(`当前IP数量: ${ips.value.length}`);
-    addLog(`选择的组别: ${selectedGroup.value}`);
-    addLog(`筛选的指标数量: ${filteredThirdIndicators.value.length}`);
-    addLog(`筛选的指标: ${filteredThirdIndicators.value.join(', ')}`);
-    
-    // 步骤1: 基础评估
-    addLog('🔄 进行基础IP评估...');
-    const response = await ipApi.evaluate(selectedGroup.value, filteredThirdIndicators.value);
-    if (response.data) {
-      evaluationResult.value = response.data;
-      
-      addLog('✅ 基础评估完成');
-      addLog(`使用的指标数量: ${response.data.selectedIndicators ? response.data.selectedIndicators.length : '全部32个'}`);
-      addLog(`AHP权重: ${response.data.weights.map(w => w.toFixed(3)).join(', ')}`);
-      addLog('IP分析结果:');
-      response.data.evaluation.forEach(result => {
-        addLog(`${result.rank}. ${result.name}: ${result.score.toFixed(2)} (±${result.error.toFixed(2)})`);
-      });
+    // 设置分析结果到响应式变量
+    if (tempEvaluationResult) {
+      evaluationResult.value = tempEvaluationResult;
       
       // 更新IP列表中的评分
       ips.value.forEach((ip) => {
-        const result = response.data?.evaluation.find(r => r.name === ip.name);
+        const result = tempEvaluationResult?.evaluation.find((r: any) => r.name === ip.name);
         if (result) {
           (ip as any).score = result.score;
         }
       });
-      
-      // 渲染基础图表
-      await nextTick();
-      addLog(`📋 评估结果数据: 
-        - 适应度历史长度: ${response.data.fitnessHistory?.length || 0}
-        - 评估结果数量: ${response.data.evaluation?.length || 0}  
-        - 权重数量: ${response.data.weights?.length || 0}`);
-      renderCharts();
     }
-
-    // 步骤2: 神经网络训练
-    if (ips.value.length >= 5) {
-      addLog('🔄 开始神经网络训练...');
-      loadingText.value = '神经网络训练中...';
-      try {
-        // 获取当前使用的指标名称
-        const currentFeatureNames = filteredThirdIndicators.value.length > 0 
-          ? filteredThirdIndicators.value 
-          : indicatorStructure.value.allThird;
-        const nnResponse = await pythonMLApi.trainNeuralNetwork(ips.value, currentFeatureNames);
-        if (nnResponse.success && nnResponse.data) {
-          neuralNetworkResult.value = nnResponse.data;
-          await nextTick();
-          renderNeuralNetworkCharts();
-          addLog('✅ 神经网络训练完成');
-        } else {
-          addLog(`⚠️ 神经网络训练失败: ${nnResponse.error || '未知错误'}`);
+    if (tempNeuralNetworkResult) {
+      neuralNetworkResult.value = tempNeuralNetworkResult;
     }
-  } catch (error) {
-        addLog(`⚠️ 神经网络训练失败: ${error}`);
-      }
-    } else {
-      addLog('⚠️ IP数量不足5个，跳过神经网络训练');
+    if (tempShapResult) {
+      shapResult.value = tempShapResult;
     }
-
-    // 步骤3: SHAP模型解释
-    if (ips.value.length >= 3) {
-      addLog('🔄 开始SHAP模型解释...');
-      loadingText.value = 'SHAP分析中...';
-      try {
-        // 获取当前使用的指标名称
-        const currentFeatureNames = filteredThirdIndicators.value.length > 0 
-          ? filteredThirdIndicators.value 
-          : indicatorStructure.value.allThird;
-        const response = await pythonMLApi.shapExplain(ips.value, currentFeatureNames);
-        if (response.success && response.data) {
-          // 保存结果
-          shapResult.value = response.data;
-          await nextTick();
-          renderSHAPChart();
-          addLog('✅ SHAP模型解释完成');
-        } else {
-          addLog(`⚠️ SHAP分析失败: ${response.error || '未知错误'}`);
-        }
-      } catch (error) {
-        addLog(`⚠️ SHAP分析失败: ${error}`);
-      }
-    } else {
-      addLog('⚠️ IP数量不足3个，跳过SHAP分析');
+    if (tempPcaResult) {
+      pcaResult.value = tempPcaResult;
     }
-
-    // 步骤4: PCA降维分析
-    if (ips.value.length >= 2) {
-      addLog('🔄 开始PCA降维分析...');
-      loadingText.value = 'PCA分析中...';
-      try {
-        const pcaResponse = await pythonMLApi.pcaAnalysis(ips.value, 2);
-        if (pcaResponse.success) {
-          // 保存结果
-          pcaResult.value = pcaResponse;
-          
-          addLog('=== PCA降维分析完成 ===');
-          addLog(`降维维度: ${pcaResponse.n_components}`);
-          addLog(`总方差解释比例: ${(pcaResponse.total_variance_explained * 100).toFixed(2)}%`);
-          addLog('各主成分方差解释比例:');
-          pcaResponse.explained_variance_ratio.forEach((ratio: number, index: number) => {
-            addLog(`主成分${index + 1}: ${(ratio * 100).toFixed(2)}%`);
-          });
-          
-          addLog('PCA降维结果:');
-          pcaResponse.pca_results.forEach((result: any) => {
-            addLog(`${result.name}: [${result.coordinates.map((c: number) => c.toFixed(3)).join(', ')}]`);
-          });
-          
-          // 渲染PCA图表
-          nextTick(() => {
-            renderPCAChart();
-          });
-        } else {
-          addLog(`⚠️ PCA分析失败: ${pcaResponse.error}`);
-        }
-      } catch (error) {
-        addLog(`⚠️ PCA分析失败: ${error}`);
-      }
-    } else {
-      addLog('⚠️ IP数量不足2个，跳过PCA分析');
+    if (tempAdvancedClusterResult) {
+      advancedClusterResult.value = tempAdvancedClusterResult;
     }
-
-    // 步骤5: 高级聚类分析
-    if (ips.value.length >= 2) {
-      addLog('🔄 开始高级聚类分析...');
-      loadingText.value = '聚类分析中...';
-      try {
-        const clusterResponse = await pythonMLApi.advancedClustering(ips.value, 2, true);
-        if (clusterResponse.success && clusterResponse.data) {
-          advancedClusterResult.value = clusterResponse.data;
-          
-          addLog('=== 高级聚类分析完成 ===');
-          addLog(`聚类数量: 2`);
-          addLog(`轮廓系数: ${clusterResponse.data.quality_metrics?.silhouette_score?.toFixed(4) || 'N/A (样本数不足)'}`);
-          addLog(`Calinski-Harabasz指数: ${clusterResponse.data.quality_metrics?.calinski_harabasz_score?.toFixed(4) || 'N/A (样本数不足)'}`);
-          
-          if (clusterResponse.data.pca_info?.used && clusterResponse.data.pca_info?.variance_explained) {
-            addLog(`PCA方差解释: ${clusterResponse.data.pca_info.variance_explained.map((v: number) => (v * 100).toFixed(1) + '%').join(', ')}`);
-          }
-          
-          addLog('聚类结果:');
-          clusterResponse.data.clustering_results?.forEach((result: any) => {
-            addLog(`${result.name}: 簇${result.cluster + 1} (距离质心: ${result.distance_to_centroid.toFixed(3)})`);
-          });
-          
-          addLog('凸包信息:');
-          clusterResponse.data.convex_hulls?.forEach((hull: any) => {
-            addLog(`簇${hull.cluster_id + 1}: 面积 ${hull.area.toFixed(3)}`);
-          });
-          
-          await nextTick();
-          generateAdvancedClusteringVisualization();
-        } else {
-          addLog(`⚠️ 聚类分析失败: ${clusterResponse.error || '未知错误'}`);
-        }
-      } catch (error) {
-        addLog(`⚠️ 聚类分析失败: ${error}`);
-      }
-    } else {
-      addLog('⚠️ IP数量不足2个，跳过高级聚类分析');
+    if (tempAdvancedClusterImage) {
+      advancedClusterImage.value = tempAdvancedClusterImage;
     }
-
-    addLog('=== 🎉 全面分析完成 ===');
-    alert('全面分析完成！所有功能已执行，请查看各项分析结果。');
     
-    // 更新统计信息
-    await loadStatistics();
+    // 等待DOM更新后渲染所有图表
+    await nextTick();
+    renderCharts();
+    renderNeuralNetworkCharts();
+    renderSHAPChart();
+    renderPCAChart();
+    generateAdvancedClusteringVisualization();
+    
+    addLog('✅ 所有结果已显示完成');
     
   } catch (error) {
     console.error('全面分析失败:', error);
@@ -1827,7 +1876,6 @@ const generateAdvancedClusteringVisualization = async () => {
     
     if (response.success) {
       advancedClusterImage.value = response.image;
-      addLog('高级聚类可视化图表生成成功');
     } else {
       addLog(`生成聚类图表失败: ${response.error}`);
     }

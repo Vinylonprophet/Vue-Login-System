@@ -44,7 +44,7 @@ export interface ApiResponse<T = any> {
 // 用户相关接口
 export interface User {
   _id: string;
-  username: string;
+  name: string;
   email: string;
   createdAt: string;
   updatedAt: string;
@@ -66,6 +66,7 @@ export interface RegisterRequest {
 
 export interface LoginResponse {
   user: User;
+  name: string;
   sessionExpires: string;
 }
 
@@ -263,6 +264,13 @@ export const ipApi = {
     apiRequest<ApiResponse<EvaluationResult>>('/api/ip/evaluate', {
       method: 'POST',
       body: JSON.stringify({ group, selectedIndicators }),
+    }),
+
+  // 评估选中的IP
+  evaluateSelected: (selectedIPs: IP[], selectedIndicators?: string[]) =>
+    apiRequest<ApiResponse<EvaluationResult>>('/api/ip/evaluate-selected', {
+      method: 'POST',
+      body: JSON.stringify({ selectedIPs, selectedIndicators }),
     }),
 
   // 聚类分析

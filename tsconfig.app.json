@@ -2,8 +2,8 @@
   "extends": "@vue/tsconfig/tsconfig.dom.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
-    "target": "ES2015",
-    "lib": ["ES2015", "DOM", "DOM.Iterable"],
+    "target": "ES2017",
+    "lib": ["ES2017", "DOM", "DOM.Iterable"],
 
     /* Linting */
     "strict": true,

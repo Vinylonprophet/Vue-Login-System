@@ -85,6 +85,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiClient, type LoginRequest } from '../utils/api'
+import { toast } from '../utils/toast'
 
 const router = useRouter()
 
@@ -147,10 +148,14 @@ const handleLogin = async () => {
       rememberMe: formData.rememberMe
     }
     
+    // 先执行登录请求
     const response = await apiClient.login(loginData)
     
     if (response.success) {
       console.log('登录成功:', response.user)
+      
+      // 显示成功消息
+      toast.success(`欢迎回来,\n${response.user?.name || '用户'}！`)
       
       // 登录成功后跳转到dashboard
       router.push('/dashboard')
@@ -174,7 +179,7 @@ const handleLogin = async () => {
       errorMessage = error.message
     }
     
-    alert(errorMessage)
+    toast.fail(errorMessage)
   } finally {
     isLoading.value = false
   }
