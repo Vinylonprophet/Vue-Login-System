@@ -111,6 +111,11 @@ class IPModel {
         return this.ips.find(ip => ip.id === id);
     }
 
+    // 根据名称获取IP
+    getIPByName(name) {
+        return this.ips.find(ip => ip.name === name);
+    }
+
     // 批量添加IP
     addBatchIPs(ips) {
         const addedIPs = [];

@@ -311,6 +311,22 @@ class IPEvaluationService {
         
         return testIPs;
     }
+
+    // 获取指标结构
+    getIndicatorStructure() {
+        return {
+            firstLevel: this.firstLevel,
+            secondLevel: this.secondLevel,
+            firstToSecond: this.firstToSecond,
+            secondToThird: this.secondToThird,
+            allThird: this.allThird
+        };
+    }
+
+    // 获取所有三级指标
+    getAllThirdIndicators() {
+        return this.allThird;
+    }
 }
 
 module.exports = new IPEvaluationService(); 

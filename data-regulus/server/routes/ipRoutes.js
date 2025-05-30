@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const ipModel = require('../models/ipModel');
 const ipEvaluationService = require('../services/ipEvaluationService');
+const multer = require('multer');
+const XLSX = require('xlsx');
+const path = require('path');
 
 // 获取指标层级信息
 router.get('/indicators', (req, res) => {
@@ -366,23 +369,247 @@ router.get('/export', (req, res) => {
     }
 });
 
-// 导入数据
-router.post('/import', (req, res) => {
+// 设置文件上传中间件
+const storage = multer.memoryStorage();
+const upload = multer({ 
+    storage: storage,
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = ['.xlsx', '.xls', '.json'];
+        const fileExtension = path.extname(file.originalname).toLowerCase();
+        if (allowedTypes.includes(fileExtension)) {
+            cb(null, true);
+        } else {
+            cb(new Error('只允许上传Excel(.xlsx, .xls)或JSON文件'), false);
+        }
+    },
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB
+    }
+});
+
+// Excel导入数据功能
+router.post('/import-excel', upload.single('file'), (req, res) => {
     try {
-        const result = ipModel.importData(req.body);
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: '没有上传文件'
+            });
+        }
+
+        const fileExtension = path.extname(req.file.originalname).toLowerCase();
         
-        res.json({
-            success: true,
-            data: result,
-            message: `成功导入${result.ipsCount}个IP和${result.historyCount}条历史记录`
-        });
+        if (fileExtension === '.json') {
+            // JSON文件处理
+            const jsonData = JSON.parse(req.file.buffer.toString());
+            const result = ipModel.importData(jsonData);
+            
+            return res.json({
+                success: true,
+                data: result,
+                message: `成功导入${result.ipsCount}个IP和${result.historyCount}条历史记录`
+            });
+        } else if (['.xlsx', '.xls'].includes(fileExtension)) {
+            // Excel文件处理
+            const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            
+            // 将Excel数据转换为JSON
+            const excelData = XLSX.utils.sheet_to_json(worksheet);
+            
+            if (!excelData || excelData.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Excel文件中没有数据'
+                });
+            }
+
+            // 解析专家评分数据
+            const parsedData = parseExpertScoreData(excelData);
+            
+            // 导入解析后的数据
+            const result = importExpertScoreData(parsedData);
+            
+            return res.json({
+                success: true,
+                data: result,
+                message: `成功导入${result.ipsCount}个专家评分IP`
+            });
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: '不支持的文件格式'
+            });
+        }
     } catch (error) {
+        console.error('导入文件失败:', error);
         res.status(400).json({
             success: false,
-            message: error.message
+            message: error.message || '导入文件失败'
         });
     }
 });
+
+// 解析专家评分Excel数据
+function parseExpertScoreData(excelData) {
+    console.log('开始解析Excel数据，行数:', excelData.length);
+    console.log('第一行数据:', JSON.stringify(excelData[0], null, 2));
+    
+    // 获取所有指标名称 (index列)
+    const indicators = [];
+    const expertColumns = [];
+    let groupName = '';
+
+    // 从第一行数据中提取列名信息
+    if (excelData.length > 0) {
+        const firstRow = excelData[0];
+        
+        // 查找专家列 (expert_专家1, expert_专家2, ...)
+        Object.keys(firstRow).forEach(key => {
+            if (key.startsWith('expert_专家')) {
+                expertColumns.push(key);
+            }
+        });
+        
+        // 获取组别名 - 确保使用正确的值
+        if (firstRow.hasOwnProperty('group_name')) {
+            groupName = String(firstRow['group_name']).trim();
+            console.log('从第一行提取的组别名:', groupName);
+        }
+        
+        // 如果第一行的组别名为空或无效，检查其他行
+        if (!groupName || groupName === 'undefined' || groupName === 'null') {
+            for (let i = 0; i < Math.min(5, excelData.length); i++) {
+                const row = excelData[i];
+                if (row.group_name && String(row.group_name).trim()) {
+                    groupName = String(row.group_name).trim();
+                    console.log(`从第${i + 1}行找到组别名:`, groupName);
+                    break;
+                }
+            }
+        }
+    }
+
+    // 提取所有指标名称
+    excelData.forEach((row, index) => {
+        if (row.index && typeof row.index === 'string') {
+            indicators.push(row.index.trim());
+        }
+    });
+
+    console.log('发现指标数量:', indicators.length);
+    console.log('前5个指标:', indicators.slice(0, 5));
+    console.log('发现专家列数量:', expertColumns.length);
+    console.log('专家列:', expertColumns);
+    console.log('最终组别名称:', groupName);
+
+    // 验证数据完整性
+    if (indicators.length === 0) {
+        throw new Error('未找到指标数据，请检查Excel文件中的index列');
+    }
+
+    if (expertColumns.length === 0) {
+        throw new Error('未找到专家评分数据，请检查Excel文件中的expert_专家列');
+    }
+
+    if (!groupName || groupName === 'undefined' || groupName === 'null') {
+        console.error('组别名获取失败，所有行的group_name值:');
+        excelData.slice(0, 3).forEach((row, index) => {
+            console.error(`第${index + 1}行 group_name:`, row.group_name, typeof row.group_name);
+        });
+        throw new Error('未找到有效的组别信息，请检查Excel文件中的group_name列');
+    }
+
+    // 获取系统指标结构
+    const allSystemIndicators = ipEvaluationService.getAllThirdIndicators();
+    console.log('系统指标总数:', allSystemIndicators.length);
+
+    // 为每个专家生成一个IP
+    const ips = [];
+    
+    expertColumns.forEach(expertColumn => {
+        // 提取专家名称 (去掉expert_前缀)
+        const expertName = expertColumn.replace('expert_专家', '专家');
+        const ipName = `${groupName}${expertName}`;
+        
+        console.log(`创建IP: ${ipName}, 组别: ${groupName}`);
+        
+        // 收集该专家的所有指标评分
+        const expertScores = Array(allSystemIndicators.length).fill(0);
+        
+        // 根据指标名称匹配分数
+        excelData.forEach(row => {
+            const indicatorName = row.index;
+            const score = parseFloat(row[expertColumn]);
+            
+            if (indicatorName && !isNaN(score)) {
+                // 在系统指标中查找匹配的位置
+                const systemIndex = allSystemIndicators.indexOf(indicatorName);
+                if (systemIndex !== -1) {
+                    expertScores[systemIndex] = score;
+                } else {
+                    console.warn(`指标 "${indicatorName}" 在系统中未找到`);
+                }
+            }
+        });
+
+        ips.push({
+            name: ipName,
+            group: groupName,
+            indicators: expertScores
+        });
+    });
+
+    return {
+        ips,
+        groupName,
+        expertCount: expertColumns.length,
+        indicatorCount: indicators.length
+    };
+}
+
+// 导入专家评分数据
+function importExpertScoreData(parsedData) {
+    const addedIPs = [];
+    const errors = [];
+
+    parsedData.ips.forEach((ipData, index) => {
+        try {
+            // 验证IP数据
+            ipModel.validateIP(ipData);
+            
+            // 检查是否已存在同名IP
+            const existingIP = ipModel.getIPByName(ipData.name);
+            if (existingIP) {
+                // 更新现有IP
+                ipModel.updateIP(existingIP.id, ipData);
+                addedIPs.push({ ...ipData, id: existingIP.id, action: 'updated' });
+            } else {
+                // 添加新IP
+                const newIP = ipModel.addIP(ipData);
+                addedIPs.push({ ...newIP, action: 'added' });
+            }
+        } catch (error) {
+            errors.push({
+                index: index + 1,
+                name: ipData.name,
+                error: error.message
+            });
+        }
+    });
+
+    return {
+        ipsCount: addedIPs.length,
+        addedIPs,
+        errors,
+        summary: {
+            groupName: parsedData.groupName,
+            expertCount: parsedData.expertCount,
+            indicatorCount: parsedData.indicatorCount
+        }
+    };
+}
 
 // 清空所有数据
 router.delete('/clear-all', (req, res) => {
@@ -395,6 +622,24 @@ router.delete('/clear-all', (req, res) => {
         });
     } catch (error) {
         res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+// 导入数据
+router.post('/import', (req, res) => {
+    try {
+        const result = ipModel.importData(req.body);
+        
+        res.json({
+            success: true,
+            data: result,
+            message: `成功导入${result.ipsCount}个IP和${result.historyCount}条历史记录`
+        });
+    } catch (error) {
+        res.status(400).json({
             success: false,
             message: error.message
         });

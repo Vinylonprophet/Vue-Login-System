@@ -322,6 +322,23 @@ export const ipApi = {
       body: JSON.stringify(data),
     }),
 
+  // Excel导入数据
+  importExcel: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    return fetch(`${API_BASE_URL}/api/ip/import-excel`, {
+      method: 'POST',
+      body: formData,
+    }).then(async response => {
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || '导入失败');
+      }
+      return data;
+    });
+  },
+
   // 清空所有数据
   clearAll: () =>
     apiRequest<ApiResponse<null>>('/api/ip/clear-all', {

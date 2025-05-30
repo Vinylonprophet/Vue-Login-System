@@ -488,6 +488,7 @@ const importData = async () => {
       loadingText.value = '导入数据中...';
       
       if (file.name.endsWith('.json')) {
+        // JSON文件处理
         const text = await file.text();
         const data = JSON.parse(text);
         
@@ -500,15 +501,38 @@ const importData = async () => {
           
           toast.success('数据导入成功！');
         }
+      } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        // Excel文件处理
+        const response = await ipApi.importExcel(file);
+        if (response.success) {
+          const { data } = response;
+          
+          addLog(`=== Excel导入成功 ===`);
+          addLog(`组别: ${data.summary.groupName}`);
+          addLog(`专家数量: ${data.summary.expertCount}`);
+          addLog(`指标数量: ${data.summary.indicatorCount}`);
+          addLog(`成功导入IP数量: ${data.ipsCount}`);
+          
+          if (data.errors && data.errors.length > 0) {
+            addLog(`导入错误: ${data.errors.length}个`);
+            data.errors.forEach((error: any) => {
+              addLog(`- ${error.name}: ${error.error}`);
+            });
+          }
+          
+          // 重新加载数据
+          await loadInitialData();
+          
+          toast.success(`成功导入${data.ipsCount}个专家评分IP！`);
+        }
       } else {
-        // Excel文件导入功能待开发
-        toast.warning('Excel导入功能开发中，请使用JSON格式文件');
-        addLog('Excel导入功能开发中...');
+        toast.warning('请选择.json、.xlsx或.xls格式的文件');
+        addLog('不支持的文件格式');
       }
     } catch (error) {
       console.error('导入数据失败:', error);
       toast.fail('导入数据失败');
-      addLog(`导入数据失败: ${error}`);
+      addLog(`导入数据失败: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       loading.value = false;
       loadingText.value = '';
