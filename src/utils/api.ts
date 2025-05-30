@@ -365,7 +365,7 @@ const PYTHON_ML_API_BASE = 'http://localhost:5001/api';
 // Python ML API 调用函数
 export const pythonMLApi = {
   // 神经网络训练
-  trainNeuralNetwork: (ips: IP[], featureNames?: string[]) => 
+  trainNeuralNetwork: (ips: any[], featureNames?: string[]) => 
     fetch(`${PYTHON_ML_API_BASE}/neural-network/train`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -375,7 +375,7 @@ export const pythonMLApi = {
     }),
 
   // SHAP模型解释
-  shapExplain: (ips: IP[], featureNames?: string[]) => 
+  shapExplain: (ips: any[], featureNames?: string[]) => 
     fetch(`${PYTHON_ML_API_BASE}/shap/explain`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -385,7 +385,7 @@ export const pythonMLApi = {
     }),
 
   // PCA降维分析
-  pcaAnalysis: (ips: IP[], nComponents: number = 2) => 
+  pcaAnalysis: (ips: any[], nComponents: number = 2) => 
     fetch(`${PYTHON_ML_API_BASE}/pca/analysis`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -395,7 +395,7 @@ export const pythonMLApi = {
     }),
 
   // 高级聚类分析
-  advancedClustering: (ips: IP[], nClusters: number = 2, usePCA: boolean = true) => 
+  advancedClustering: (ips: any[], nClusters: number = 2, usePCA: boolean = true) => 
     fetch(`${PYTHON_ML_API_BASE}/clustering/advanced`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

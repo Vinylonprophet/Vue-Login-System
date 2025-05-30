@@ -353,7 +353,10 @@ const indicatorStructure = ref<IndicatorStructure>({
   secondLevel: [],
   firstToSecond: {},
   secondToThird: {},
-  allThird: []
+  allThird: [],
+  indicatorPropertyMap: {},
+  propertyIndicatorMap: {},
+  allProperties: []
 });
 
 // 筛选条件
@@ -572,7 +575,30 @@ const performComprehensiveAnalysis = async () => {
             const currentFeatureNames = filteredThirdIndicators.value.length > 0 
               ? filteredThirdIndicators.value 
               : indicatorStructure.value.allThird;
-            const nnResponse = await pythonMLApi.trainNeuralNetwork(selectedIPData, currentFeatureNames);
+            
+            // 转换IP数据格式：将对象格式的indicators转换为数组格式
+            const ipsWithArrayIndicators = selectedIPData.map(ip => {
+              // 如果indicators已经是数组格式，直接使用
+              if (Array.isArray(ip.indicators)) {
+                return { ...ip, indicators: ip.indicators };
+              }
+              
+              // 如果indicators是对象格式，需要转换为数组
+              const indicatorArray: number[] = [];
+              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
+                // 按照系统定义的属性顺序生成数组
+                indicatorStructure.value.allProperties.forEach(property => {
+                  indicatorArray.push(ip.indicators[property] || 0);
+                });
+              } else {
+                // 兜底方案：如果没有属性映射，直接使用对象值
+                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
+              }
+              
+              return { ...ip, indicators: indicatorArray };
+            });
+            
+            const nnResponse = await pythonMLApi.trainNeuralNetwork(ipsWithArrayIndicators, currentFeatureNames);
             if (nnResponse.success && nnResponse.data) {
               tempNeuralNetworkResult = nnResponse.data;
             } else {
@@ -592,7 +618,26 @@ const performComprehensiveAnalysis = async () => {
             const currentFeatureNames = filteredThirdIndicators.value.length > 0 
               ? filteredThirdIndicators.value 
               : indicatorStructure.value.allThird;
-            const shapResponse = await pythonMLApi.shapExplain(selectedIPData, currentFeatureNames);
+            
+            // 转换IP数据格式
+            const ipsWithArrayIndicators = selectedIPData.map(ip => {
+              if (Array.isArray(ip.indicators)) {
+                return { ...ip, indicators: ip.indicators };
+              }
+              
+              const indicatorArray: number[] = [];
+              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
+                indicatorStructure.value.allProperties.forEach(property => {
+                  indicatorArray.push(ip.indicators[property] || 0);
+                });
+              } else {
+                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
+              }
+              
+              return { ...ip, indicators: indicatorArray };
+            });
+            
+            const shapResponse = await pythonMLApi.shapExplain(ipsWithArrayIndicators, currentFeatureNames);
             if (shapResponse.success && shapResponse.data) {
               tempShapResult = shapResponse.data;
             } else {
@@ -609,7 +654,25 @@ const performComprehensiveAnalysis = async () => {
         if (selectedIPs.value.length >= 2) {
           loadingText.value = 'PCA分析中...';
           try {
-            const pcaResponse = await pythonMLApi.pcaAnalysis(selectedIPData, 2);
+            // 转换IP数据格式
+            const ipsWithArrayIndicators = selectedIPData.map(ip => {
+              if (Array.isArray(ip.indicators)) {
+                return { ...ip, indicators: ip.indicators };
+              }
+              
+              const indicatorArray: number[] = [];
+              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
+                indicatorStructure.value.allProperties.forEach(property => {
+                  indicatorArray.push(ip.indicators[property] || 0);
+                });
+              } else {
+                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
+              }
+              
+              return { ...ip, indicators: indicatorArray };
+            });
+            
+            const pcaResponse = await pythonMLApi.pcaAnalysis(ipsWithArrayIndicators, 2);
             if (pcaResponse.success) {
               tempPcaResult = pcaResponse;
             } else {
@@ -626,7 +689,25 @@ const performComprehensiveAnalysis = async () => {
         if (selectedIPs.value.length >= 2) {
           loadingText.value = '聚类分析中...';
           try {
-            const clusterResponse = await pythonMLApi.advancedClustering(selectedIPData, 2, true);
+            // 转换IP数据格式
+            const ipsWithArrayIndicators = selectedIPData.map(ip => {
+              if (Array.isArray(ip.indicators)) {
+                return { ...ip, indicators: ip.indicators };
+              }
+              
+              const indicatorArray: number[] = [];
+              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
+                indicatorStructure.value.allProperties.forEach(property => {
+                  indicatorArray.push(ip.indicators[property] || 0);
+                });
+              } else {
+                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
+              }
+              
+              return { ...ip, indicators: indicatorArray };
+            });
+            
+            const clusterResponse = await pythonMLApi.advancedClustering(ipsWithArrayIndicators, 2, true);
             if (clusterResponse.success && clusterResponse.data) {
               tempAdvancedClusterResult = clusterResponse.data;
               // 生成聚类图像（但不立即显示）

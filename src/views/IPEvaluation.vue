@@ -723,19 +723,25 @@ const performComprehensiveAnalysis = async () => {
         
         // 步骤1: 基础评估
         addLog('🔄 进行基础IP评估...');
-        const response = await ipApi.evaluate(selectedGroup.value, filteredThirdIndicators.value);
-        if (response.data) {
-          tempEvaluationResult = response.data;
-          
-          addLog('✅ 基础评估完成');
-          addLog(`使用的指标数量: ${response.data.selectedIndicators ? response.data.selectedIndicators.length : '全部32个'}`);
-          addLog(`AHP权重: ${response.data.weights.map(w => w.toFixed(3)).join(', ')}`);
-          addLog('IP分析结果:');
-          response.data.evaluation.forEach(result => {
-            addLog(`${result.rank}. ${result.name}: ${result.score.toFixed(2)} (±${result.error.toFixed(2)})`);
-          });
-          
-          // 注意：这里不立即更新IP列表中的评分，不调用renderCharts()
+        try {
+          const response = await ipApi.evaluate(selectedGroup.value, filteredThirdIndicators.value);
+          if (response.data) {
+            tempEvaluationResult = response.data;
+            
+            addLog('✅ 基础评估完成');
+            addLog(`使用的指标数量: ${response.data.selectedIndicators ? response.data.selectedIndicators.length : '全部32个'}`);
+            addLog(`AHP权重: ${response.data.weights.map(w => w.toFixed(3)).join(', ')}`);
+            addLog('IP分析结果:');
+            response.data.evaluation.forEach(result => {
+              addLog(`${result.rank}. ${result.name}: ${result.score.toFixed(2)} (±${result.error.toFixed(2)})`);
+            });
+          } else {
+            throw new Error('基础评估返回空数据');
+          }
+        } catch (error) {
+          addLog(`❌ 基础评估失败: ${error}`);
+          console.error('基础评估详细错误:', error);
+          throw error; // 重新抛出错误，让外层捕获
         }
 
         // 步骤2: 神经网络训练
@@ -747,7 +753,30 @@ const performComprehensiveAnalysis = async () => {
             const currentFeatureNames = filteredThirdIndicators.value.length > 0 
               ? filteredThirdIndicators.value 
               : indicatorStructure.value.allThird;
-            const nnResponse = await pythonMLApi.trainNeuralNetwork(ips.value, currentFeatureNames);
+            
+            // 转换IP数据格式：将对象格式的indicators转换为数组格式
+            const ipsWithArrayIndicators = ips.value.map(ip => {
+              // 如果indicators已经是数组格式，直接使用
+              if (Array.isArray(ip.indicators)) {
+                return { ...ip, indicators: ip.indicators };
+              }
+              
+              // 如果indicators是对象格式，需要转换为数组
+              const indicatorArray: number[] = [];
+              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
+                // 按照系统定义的属性顺序生成数组
+                indicatorStructure.value.allProperties.forEach(property => {
+                  indicatorArray.push(ip.indicators[property] || 0);
+                });
+              } else {
+                // 兜底方案：如果没有属性映射，直接使用对象值
+                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
+              }
+              
+              return { ...ip, indicators: indicatorArray };
+            });
+            
+            const nnResponse = await pythonMLApi.trainNeuralNetwork(ipsWithArrayIndicators, currentFeatureNames);
             if (nnResponse.success && nnResponse.data) {
               tempNeuralNetworkResult = nnResponse.data;
               addLog('✅ 神经网络训练完成');
@@ -756,6 +785,8 @@ const performComprehensiveAnalysis = async () => {
             }
           } catch (error) {
             addLog(`⚠️ 神经网络训练失败: ${error}`);
+            console.warn('神经网络训练错误（非致命）:', error);
+            // 不重新抛出错误，继续执行其他步骤
           }
         } else {
           addLog('⚠️ IP数量不足5个，跳过神经网络训练');
@@ -770,7 +801,26 @@ const performComprehensiveAnalysis = async () => {
             const currentFeatureNames = filteredThirdIndicators.value.length > 0 
               ? filteredThirdIndicators.value 
               : indicatorStructure.value.allThird;
-            const response = await pythonMLApi.shapExplain(ips.value, currentFeatureNames);
+            
+            // 转换IP数据格式
+            const ipsWithArrayIndicators = ips.value.map(ip => {
+              if (Array.isArray(ip.indicators)) {
+                return { ...ip, indicators: ip.indicators };
+              }
+              
+              const indicatorArray: number[] = [];
+              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
+                indicatorStructure.value.allProperties.forEach(property => {
+                  indicatorArray.push(ip.indicators[property] || 0);
+                });
+              } else {
+                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
+              }
+              
+              return { ...ip, indicators: indicatorArray };
+            });
+            
+            const response = await pythonMLApi.shapExplain(ipsWithArrayIndicators, currentFeatureNames);
             if (response.success && response.data) {
               // 保存结果
               tempShapResult = response.data;
@@ -780,6 +830,8 @@ const performComprehensiveAnalysis = async () => {
             }
           } catch (error) {
             addLog(`⚠️ SHAP分析失败: ${error}`);
+            console.warn('SHAP分析错误（非致命）:', error);
+            // 不重新抛出错误，继续执行其他步骤
           }
         } else {
           addLog('⚠️ IP数量不足3个，跳过SHAP分析');
@@ -790,7 +842,25 @@ const performComprehensiveAnalysis = async () => {
           addLog('🔄 开始PCA降维分析...');
           loadingText.value = 'PCA分析中...';
           try {
-            const pcaResponse = await pythonMLApi.pcaAnalysis(ips.value, 2);
+            // 转换IP数据格式
+            const ipsWithArrayIndicators = ips.value.map(ip => {
+              if (Array.isArray(ip.indicators)) {
+                return { ...ip, indicators: ip.indicators };
+              }
+              
+              const indicatorArray: number[] = [];
+              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
+                indicatorStructure.value.allProperties.forEach(property => {
+                  indicatorArray.push(ip.indicators[property] || 0);
+                });
+              } else {
+                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
+              }
+              
+              return { ...ip, indicators: indicatorArray };
+            });
+            
+            const pcaResponse = await pythonMLApi.pcaAnalysis(ipsWithArrayIndicators, 2);
             if (pcaResponse.success) {
               // 保存结果
               tempPcaResult = pcaResponse;
@@ -807,13 +877,13 @@ const performComprehensiveAnalysis = async () => {
               pcaResponse.pca_results.forEach((result: any) => {
                 addLog(`${result.name}: [${result.coordinates.map((c: number) => c.toFixed(3)).join(', ')}]`);
               });
-              
-              // 注意：这里不立即渲染PCA图表
             } else {
               addLog(`⚠️ PCA分析失败: ${pcaResponse.error}`);
             }
           } catch (error) {
             addLog(`⚠️ PCA分析失败: ${error}`);
+            console.warn('PCA分析错误（非致命）:', error);
+            // 不重新抛出错误，继续执行其他步骤
           }
         } else {
           addLog('⚠️ IP数量不足2个，跳过PCA分析');
@@ -824,7 +894,25 @@ const performComprehensiveAnalysis = async () => {
           addLog('🔄 开始高级聚类分析...');
           loadingText.value = '聚类分析中...';
           try {
-            const clusterResponse = await pythonMLApi.advancedClustering(ips.value, 2, true);
+            // 转换IP数据格式
+            const ipsWithArrayIndicators = ips.value.map(ip => {
+              if (Array.isArray(ip.indicators)) {
+                return { ...ip, indicators: ip.indicators };
+              }
+              
+              const indicatorArray: number[] = [];
+              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
+                indicatorStructure.value.allProperties.forEach(property => {
+                  indicatorArray.push(ip.indicators[property] || 0);
+                });
+              } else {
+                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
+              }
+              
+              return { ...ip, indicators: indicatorArray };
+            });
+            
+            const clusterResponse = await pythonMLApi.advancedClustering(ipsWithArrayIndicators, 2, true);
             if (clusterResponse.success && clusterResponse.data) {
               tempAdvancedClusterResult = clusterResponse.data;
               
@@ -858,12 +946,15 @@ const performComprehensiveAnalysis = async () => {
                 }
               } catch (error) {
                 addLog('生成聚类图表失败');
+                console.warn('生成聚类图表错误（非致命）:', error);
               }
             } else {
               addLog(`⚠️ 聚类分析失败: ${clusterResponse.error || '未知错误'}`);
             }
           } catch (error) {
             addLog(`⚠️ 聚类分析失败: ${error}`);
+            console.warn('聚类分析错误（非致命）:', error);
+            // 不重新抛出错误，继续执行其他步骤
           }
         } else {
           addLog('⚠️ IP数量不足2个，跳过高级聚类分析');
@@ -925,7 +1016,18 @@ const performComprehensiveAnalysis = async () => {
   } catch (error) {
     console.error('全面分析失败:', error);
     addLog(`❌ 分析失败: ${error}`);
-    alert(`分析失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    
+    // 添加更详细的错误信息
+    if (error instanceof Error) {
+      addLog(`错误类型: ${error.name}`);
+      addLog(`错误消息: ${error.message}`);
+      if (error.stack) {
+        console.error('错误堆栈:', error.stack);
+      }
+    }
+    
+    // 显示用户友好的错误信息
+    alert(`分析失败: ${error instanceof Error ? error.message : '未知错误'}。请查看控制台获取详细信息。`);
   } finally {
     loading.value = false;
     loadingText.value = '';

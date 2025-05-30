@@ -8,7 +8,7 @@ const path = require('path');
 const { authenticate } = require('../middleware/auth');
 
 // 应用认证中间件到所有需要用户认证的路由
-router.use(['/ips', '/groups', '/evaluate', '/clustering', '/history', '/statistics', '/clear-all', '/export', '/import', '/import-excel', '/test-data'], authenticate);
+router.use(['/ips', '/groups', '/evaluate', '/evaluate-selected', '/clustering', '/history', '/statistics', '/clear-all', '/export', '/import', '/import-excel', '/test-data', '/indicators/filtered'], authenticate);
 
 // 获取指标层级信息
 router.get('/indicators', (req, res) => {
