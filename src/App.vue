@@ -66,7 +66,11 @@ const logout = async () => {
         <div class="nav-menu">
           <router-link to="/dashboard" class="nav-link">
             <span class="nav-icon">🏠</span>
-            控制台
+            仪表盘
+          </router-link>
+          <router-link to="/ip-management" class="nav-link">
+            <span class="nav-icon">🗂️</span>
+            数据管理
           </router-link>
         </div>
         

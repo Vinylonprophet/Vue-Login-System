@@ -5,12 +5,14 @@
       <div class="header-top">
         <h1>少数民族民俗体育IP数据管理</h1>
         <div class="header-actions">
-          <router-link to="/dashboard" class="header-btn dashboard-btn">
+          <button @click="importData" class="header-btn import-btn">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <path d="M7 10l5 5 5-5"/>
+              <path d="M12 15V3"/>
             </svg>
-            <span>返回仪表板</span>
-          </router-link>
+            <span>Excel导入</span>
+          </button>
           <button @click="toggleDataEntry" class="header-btn entry-btn">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -67,128 +69,104 @@
       </div>
     </div>
 
-    <!-- 数据录入面板 -->
-    <div class="input-section" v-show="showDataEntryPanel">
-      <h3>IP数据录入</h3>
-      
-      <!-- IP基本信息 -->
-      <div class="ip-basic-info">
-        <div class="form-row">
-          <div class="form-group">
-            <label>IP名称:</label>
-            <input v-model="ipForm.name" type="text" placeholder="请输入IP名称" />
-          </div>
-          <div class="form-group">
-            <label>组别:</label>
-            <input v-model="ipForm.group" type="text" placeholder="请输入组别" />
-          </div>
-        </div>
-      </div>
-
-      <!-- 指标数据录入 -->
-      <div class="indicator-inputs">
-        <h4>指标数据录入</h4>
-        <div class="inputs-grid">
-          <div v-for="indicator in filteredThirdIndicators" :key="indicator" class="input-group">
-            <label>{{ indicator }}</label>
-            <input 
-              type="number" 
-              v-model.number="indicatorValues[indicator]"
-              step="0.1"
-              min="0"
-              max="100"
-              placeholder="请输入评分"
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- 操作按钮 -->
-      <div class="form-actions">
-        <button @click="saveIP" class="btn btn-primary">保存IP</button>
-        <button @click="clearForm" class="btn btn-secondary">清空表单</button>
-        <button @click="fillRandomData" class="btn btn-warning">随机填充</button>
-      </div>
-    </div>
-
     <!-- 主要内容区域 -->
     <div class="main-content">
-      <!-- 左侧管理面板 -->
-      <div class="management-panel">
-        <!-- IP管理 -->
-        <div class="ip-management-section">
-          <h3>IP管理</h3>
-          <div class="group-filter">
-            <label>筛选组别:</label>
-            <select v-model="selectedGroup" @change="loadIPs">
-              <option v-for="group in groups" :key="group" :value="group">{{ group }}</option>
-            </select>
-          </div>
-          
-          <div class="ip-list">
-            <div 
-              v-for="ip in ips" 
-              :key="ip.id" 
-              class="ip-item"
-              :class="{ active: selectedIP?.id === ip.id }"
-              @click="selectIP(ip)"
-            >
-              <div class="ip-header">
-                <div class="ip-name">{{ ip.name }}</div>
-                <div class="ip-actions">
-                  <button @click.stop="editIP(ip)" class="btn-small btn-edit">编辑</button>
-                  <button @click.stop="deleteIP(ip)" class="btn-small btn-delete">删除</button>
+      <!-- 上方操作区域 -->
+      <div class="top-section">
+        <!-- 左侧IP管理 -->
+        <div class="management-panel">
+          <div class="ip-management-section">
+            <h3>IP管理</h3>
+            <div class="group-filter">
+              <label>筛选组别:</label>
+              <select v-model="selectedGroup" @change="loadIPs">
+                <option v-for="group in groups" :key="group" :value="group">{{ group }}</option>
+              </select>
+            </div>
+            
+            <div class="ip-list">
+              <div 
+                v-for="ip in ips" 
+                :key="ip.id" 
+                class="ip-item"
+                :class="{ active: selectedIP?.id === ip.id }"
+                @click="selectIP(ip)"
+              >
+                <div class="ip-header">
+                  <div class="ip-name">{{ ip.name }}</div>
+                  <div class="ip-actions">
+                    <button @click.stop="deleteIP(ip)" class="btn-small btn-delete">删除</button>
+                  </div>
+                </div>
+                <div class="ip-details">
+                  <div class="ip-group">组别: {{ ip.group }}</div>
+                  <div class="ip-indicators">指标数: {{ ip.indicators?.length || 0 }}</div>
                 </div>
               </div>
-              <div class="ip-details">
-                <div class="ip-group">组别: {{ ip.group }}</div>
-                <div class="ip-indicators">指标数: {{ ip.indicators?.length || 0 }}</div>
-              </div>
+            </div>
+          </div>
+
+          <!-- 数据操作 -->
+          <div class="data-operations">
+            <h4>数据操作</h4>
+            <div class="operation-buttons">
+              <button @click="clearAllData" class="btn btn-danger">清空数据</button>
             </div>
           </div>
         </div>
 
-        <!-- 数据操作 -->
-        <div class="data-operations">
-          <h4>数据操作</h4>
-          <div class="operation-buttons">
-            <button @click="viewHistory" class="btn btn-info">查看历史</button>
-            <button @click="exportData" class="btn btn-success">导出数据</button>
-            <button @click="importData" class="btn btn-primary">导入数据</button>
-            <button @click="clearAllData" class="btn btn-danger">清空数据</button>
+        <!-- 右侧数据编辑面板 -->
+        <div class="data-entry-panel" v-show="showDataEntryPanel">
+          <h3>数据编辑</h3>
+          
+          <!-- IP基本信息 -->
+          <div class="ip-basic-info">
+            <div class="form-row">
+              <div class="form-group">
+                <label>IP名称:</label>
+                <input v-model="ipForm.name" type="text" placeholder="请输入IP名称" />
+              </div>
+              <div class="form-group">
+                <label>组别:</label>
+                <input v-model="ipForm.group" type="text" placeholder="请输入组别" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 指标数据录入 -->
+          <div class="indicator-inputs">
+            <h4>指标数据录入</h4>
+            <div class="inputs-grid">
+              <div v-for="indicator in filteredThirdIndicators" :key="indicator" class="input-group">
+                <label>{{ indicator }}</label>
+                <input 
+                  type="number" 
+                  v-model.number="indicatorValues[indicator]"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  placeholder="请输入评分"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="form-actions">
+            <button @click="saveIP" class="btn btn-primary">保存IP</button>
+            <button @click="clearForm" class="btn btn-secondary">清空表单</button>
+            <button @click="fillRandomData" class="btn btn-warning">随机填充</button>
           </div>
         </div>
       </div>
 
-      <!-- 右侧操作日志 -->
+      <!-- 下方操作日志 -->
       <div class="log-panel">
         <h3>操作日志</h3>
         <div class="log-content" ref="logContent">
           <div v-for="(log, index) in logs" :key="index" class="log-entry">
             {{ log }}
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 模态框 -->
-    <!-- 历史记录模态框 -->
-    <div v-if="showHistoryDialog" class="modal" @click="closeDialogs">
-      <div class="modal-content large" @click.stop>
-        <h3>分析历史记录</h3>
-        <div class="history-list">
-          <div 
-            v-for="record in historyRecords" 
-            :key="record.id"
-            class="history-item"
-            @click="loadHistoryRecord(record)"
-          >
-            <div class="history-time">{{ formatDate(record.timestamp) }}</div>
-            <div class="history-info">IP数量: {{ record.ipsCount }}</div>
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button @click="closeDialogs" class="btn btn-secondary">关闭</button>
         </div>
       </div>
     </div>
@@ -246,9 +224,6 @@ const statistics = reactive({
 // 日志
 const logs = ref<string[]>([]);
 
-// 对话框状态
-const showHistoryDialog = ref(false);
-
 // UI控制状态
 const showDataEntryPanel = ref(true);
 
@@ -258,8 +233,9 @@ const ipForm = reactive({
   group: ''
 });
 
-// 历史记录
-const historyRecords = ref<any[]>([]);
+// 编辑状态
+const editMode = ref(false);
+const editingIPId = ref<string | null>(null);
 
 // 生命周期
 onMounted(async () => {
@@ -349,7 +325,7 @@ const saveIP = async () => {
   
   try {
     loading.value = true;
-    loadingText.value = '保存IP中...';
+    loadingText.value = editMode.value ? '更新IP中...' : '保存IP中...';
     
     const indicators = filteredThirdIndicators.value.map(indicator => 
       indicatorValues.value[indicator] || 0
@@ -361,15 +337,20 @@ const saveIP = async () => {
       indicators
     };
     
-    await ipApi.addIP(ipData);
-    addLog(`已添加IP: ${ipData.name}`);
+    if (editMode.value && editingIPId.value) {
+      await ipApi.updateIP(editingIPId.value, ipData);
+      addLog(`已更新IP: ${ipData.name}`);
+      toast.success(`IP "${ipData.name}" 更新成功！`);
+    } else {
+      await ipApi.addIP(ipData);
+      addLog(`已添加IP: ${ipData.name}`);
+      toast.success(`IP "${ipData.name}" 保存成功！`);
+    }
     
     clearForm();
     await loadIPs();
     await loadGroups();
     await loadStatistics();
-    
-    toast.success(`IP "${ipData.name}" 保存成功！`);
   } catch (error) {
     console.error('保存IP失败:', error);
     toast.fail(error instanceof Error ? error.message : '保存IP失败');
@@ -391,12 +372,6 @@ const selectIP = (ip: IP) => {
   });
   
   addLog(`选择IP: ${ip.name}`);
-};
-
-const editIP = (ip: IP) => {
-  selectIP(ip);
-  showDataEntryPanel.value = true;
-  addLog(`编辑IP: ${ip.name}`);
 };
 
 const deleteIP = async (ip: IP) => {
@@ -431,6 +406,8 @@ const deleteIP = async (ip: IP) => {
 const clearForm = () => {
   ipForm.name = '';
   ipForm.group = '';
+  editMode.value = false;
+  editingIPId.value = null;
   initializeIndicatorValues();
   selectedIP.value = null;
   addLog('表单已清空');
@@ -471,32 +448,6 @@ const generateTestData = async () => {
   }
 };
 
-const viewHistory = async () => {
-  try {
-    const response = await ipApi.getHistory();
-    if (response.data) {
-      historyRecords.value = response.data;
-      showHistoryDialog.value = true;
-    }
-  } catch (error) {
-    console.error('加载历史记录失败:', error);
-  }
-};
-
-const loadHistoryRecord = async (record: any) => {
-  try {
-    const response = await ipApi.getHistoryById(record.id);
-    
-    addLog('=== 加载历史记录 ===');
-    addLog(`时间: ${formatDate(record.timestamp)}`);
-    addLog(`IP数量: ${record.ipsCount}`);
-    
-    showHistoryDialog.value = false;
-  } catch (error) {
-    console.error('加载历史记录失败:', error);
-  }
-};
-
 const exportData = async () => {
   try {
     loading.value = true;
@@ -527,18 +478,40 @@ const exportData = async () => {
 const importData = async () => {
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = '.json';
+  input.accept = '.json,.xlsx,.xls';
   input.onchange = async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
     
     try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      // 这里应该有导入数据的API调用
-      addLog('数据导入功能开发中...');
+      loading.value = true;
+      loadingText.value = '导入数据中...';
+      
+      if (file.name.endsWith('.json')) {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        
+        const response = await ipApi.importData(data);
+        if (response.data) {
+          addLog(`成功导入${response.data.ipsCount}个IP和${response.data.historyCount}条历史记录`);
+          
+          // 重新加载数据
+          await loadInitialData();
+          
+          toast.success('数据导入成功！');
+        }
+      } else {
+        // Excel文件导入功能待开发
+        toast.warning('Excel导入功能开发中，请使用JSON格式文件');
+        addLog('Excel导入功能开发中...');
+      }
     } catch (error) {
-      addLog('导入数据失败');
+      console.error('导入数据失败:', error);
+      toast.fail('导入数据失败');
+      addLog(`导入数据失败: ${error}`);
+    } finally {
+      loading.value = false;
+      loadingText.value = '';
     }
   };
   input.click();
@@ -549,12 +522,25 @@ const clearAllData = async () => {
   
   try {
     loading.value = true;
-    // 这里应该有清空数据的API调用
-    addLog('清空数据功能开发中...');
+    loadingText.value = '清空数据中...';
+    
+    await ipApi.clearAll();
+    addLog('所有数据已清空');
+    
+    // 重新加载数据
+    await loadInitialData();
+    
+    // 清空表单
+    clearForm();
+    
+    toast.success('所有数据已清空！');
   } catch (error) {
-    addLog('清空数据失败');
+    console.error('清空数据失败:', error);
+    toast.fail('清空数据失败');
+    addLog(`清空数据失败: ${error}`);
   } finally {
     loading.value = false;
+    loadingText.value = '';
   }
 };
 
@@ -576,10 +562,6 @@ const addLog = (message: string) => {
       logContent.scrollTop = logContent.scrollHeight;
     }
   });
-};
-
-const closeDialogs = () => {
-  showHistoryDialog.value = false;
 };
 
 // UI控制函数
@@ -649,20 +631,31 @@ const formatDate = (dateString: string) => {
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.header-btn.dashboard-btn {
+.header-btn.import-btn {
   background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white;
 }
 
-.header-btn.filter-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.header-btn.import-btn:hover {
+  background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
 }
 
 .header-btn.entry-btn {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.header-btn.entry-btn:hover {
+  background: linear-gradient(135deg, #ee82f0 0%, #f04658 100%);
 }
 
 .header-btn.test-btn {
-  background: linear-gradient(135deg, #ffc107 0%, #ff9a9e 100%);
+  background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+  color: white;
+}
+
+.header-btn.test-btn:hover {
+  background: linear-gradient(135deg, #e0a800 0%, #dc6305 100%);
 }
 
 .btn-icon {
@@ -824,15 +817,29 @@ const formatDate = (dateString: string) => {
 }
 
 .indicator-inputs {
+  flex: 1;
   overflow-y: auto;
   padding-right: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.indicator-inputs h4 {
+  margin-bottom: 15px;
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 600;
+  padding-left: 8px;
+  border-left: 4px solid #28a745;
 }
 
 .inputs-grid {
+  margin-top: 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px 16px;
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
   padding-right: 8px;
 }
@@ -896,101 +903,102 @@ const formatDate = (dateString: string) => {
   box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
 }
 
-/* 主要内容布局 */
+/* 主布局样式 */
 .main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.top-section {
   display: grid;
   grid-template-columns: 400px 1fr;
   gap: 20px;
-  min-height: 60vh;
   align-items: start;
 }
 
-/* 管理面板美化 */
 .management-panel {
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
-  border: 1px solid #e9ecef;
-  height: fit-content;
-  position: sticky;
-  top: 20px;
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  height: 600px;
+  display: flex;
+  flex-direction: column;
 }
 
-/* IP管理部分美化 */
+.data-entry-panel {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  height: 600px;
+  min-width: 0; /* 允许收缩 */
+  display: flex;
+  flex-direction: column;
+}
+
+.data-entry-panel h3 {
+  color: #2c3e50;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  padding-bottom: 10px;
+}
+
 .ip-management-section {
-  margin-bottom: 30px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #eee;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* 确保可以收缩 */
+  max-height: 450px; /* 为数据操作留出至少150px空间 */
 }
 
 .ip-management-section h3 {
-  margin: 0 0 20px 0;
+  margin-bottom: 15px;
   color: #2c3e50;
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
   text-align: center;
-  position: relative;
-  padding-bottom: 12px;
 }
 
-.ip-management-section h3::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60px;
-  height: 4px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 2px;
-}
-
-/* 组别筛选美化 */
 .group-filter {
-  margin-bottom: 20px;
-  padding: 16px;
-  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-  border-radius: 12px;
-  border: 1px solid #e1bee7;
+  margin-bottom: 15px;
 }
 
 .group-filter label {
   display: block;
-  font-size: 14px;
-  font-weight: 600;
-  color: #5e35b1;
-  margin-bottom: 8px;
+  font-size: 13px;
+  color: #6c757d;
+  font-weight: 500;
+  margin-bottom: 6px;
 }
 
 .group-filter select {
   width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #b39ddb;
-  border-radius: 8px;
-  font-size: 14px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
   background: white;
   cursor: pointer;
-  transition: all 0.3s ease;
-  color: #5e35b1;
-  font-weight: 500;
 }
 
 .group-filter select:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102,126,234,0.15);
-  background: #fafafa;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
 }
 
-.group-filter select:hover {
-  border-color: #7e57c2;
-  background: #fafafa;
-}
-
-/* IP列表美化 */
 .ip-list {
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
-  padding-right: 8px;
+  padding-right: 6px;
+  max-height: 300px; /* 减少最大高度，为数据操作留出空间 */
+  min-height: 200px; /* 设置最小高度 */
 }
 
 .ip-list::-webkit-scrollbar {
@@ -1003,223 +1011,137 @@ const formatDate = (dateString: string) => {
 }
 
 .ip-list::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #888;
   border-radius: 3px;
 }
 
 .ip-list::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+  background: #555;
 }
 
-/* IP项目美化 */
 .ip-item {
-  margin-bottom: 12px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  border: 2px solid #e9ecef;
-  border-radius: 12px;
-  padding: 16px;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  position: relative;
-  overflow: hidden;
-}
-
-.ip-item::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .ip-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(102,126,234,0.15);
-  border-color: #667eea;
-}
-
-.ip-item:hover::before {
-  opacity: 1;
+  background: #e3f2fd;
+  border-color: #007bff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,123,255,0.15);
 }
 
 .ip-item.active {
-  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-  border-color: #667eea;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(102,126,234,0.2);
+  background: #d4edda;
+  border-color: #28a745;
+  box-shadow: 0 2px 8px rgba(40,167,69,0.2);
 }
 
-.ip-item.active::before {
-  opacity: 1;
-}
-
-/* IP项目头部 */
 .ip-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .ip-name {
-  font-weight: 700;
-  font-size: 16px;
+  font-weight: 600;
+  font-size: 14px;
   color: #2c3e50;
-  flex: 1;
-  margin-right: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .ip-actions {
   display: flex;
   gap: 6px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
 }
 
-.ip-item:hover .ip-actions {
-  opacity: 1;
-}
-
-/* 小按钮美化 */
 .btn-small {
-  padding: 6px 12px;
+  padding: 4px 8px;
+  font-size: 11px;
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
 }
 
 .btn-edit {
-  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  background: #007bff;
   color: white;
 }
 
 .btn-edit:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(40,167,69,0.3);
+  background: #0056b3;
 }
 
 .btn-delete {
-  background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
+  background: #dc3545;
   color: white;
 }
 
 .btn-delete:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(220,53,69,0.3);
+  background: #c82333;
 }
 
-/* IP详情 */
 .ip-details {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.ip-group {
-  font-size: 13px;
-  color: #6c757d;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-weight: 500;
-  border: 1px solid #dee2e6;
-}
-
-.ip-indicators {
   font-size: 12px;
-  color: #667eea;
-  font-weight: 600;
-  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid #b39ddb;
+  color: #6c757d;
 }
 
-/* 数据操作部分美化 */
+.ip-group, .ip-indicators {
+  font-weight: 500;
+}
+
 .data-operations {
-  padding-top: 24px;
-  border-top: 2px solid #e9ecef;
+  padding-top: 10px;
+  flex-shrink: 0; /* 防止被压缩 */
+  min-height: 100px; /* 确保数据操作区域有最小高度 */
 }
 
 .data-operations h4 {
-  margin: 0 0 16px 0;
+  margin-bottom: 15px;
   color: #2c3e50;
-  font-size: 18px;
-  font-weight: 700;
-  text-align: center;
-  position: relative;
-  padding-bottom: 8px;
-}
-
-.data-operations h4::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 40px;
-  height: 3px;
-  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-  border-radius: 2px;
+  font-size: 16px;
+  font-weight: 600;
+  padding-left: 8px;
+  border-left: 4px solid #ffc107;
 }
 
 .operation-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .operation-buttons .btn {
-  padding: 12px 16px;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-align: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.operation-buttons .btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+  flex: 1;
+  min-width: 100px;
+  font-size: 12px;
+  padding: 8px 12px;
 }
 
 .btn-info {
-  background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
   color: white;
 }
 
-.btn-success {
-  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-  color: white;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #007bff 0%, #667eea 100%);
-  color: white;
+.btn-info:hover {
+  background: linear-gradient(135deg, #138496 0%, #117a8b 100%);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
   color: white;
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
 }
 
 .log-panel {
@@ -1371,7 +1293,7 @@ const formatDate = (dateString: string) => {
 
 /* 表单相关样式 */
 .ip-basic-info {
-  margin-bottom: 20px;
+  margin: 20px 0px;
   padding: 15px;
   background: white;
   border-radius: 8px;
@@ -1491,5 +1413,79 @@ const formatDate = (dateString: string) => {
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   color: #495057;
   border: 1px solid #dee2e6;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .ip-management-container {
+    padding: 10px;
+  }
+  
+  .top-section {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  
+  .management-panel {
+    order: 2;
+  }
+  
+  .data-entry-panel {
+    order: 1;
+  }
+  
+  .inputs-grid {
+    grid-template-columns: 1fr;
+    max-height: 300px;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .stats-container {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .header-btn {
+    min-width: 120px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-top {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+  
+  .header-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .header-btn {
+    flex: 1;
+    min-width: 100px;
+  }
+  
+  .inputs-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .form-actions .btn {
+    width: 100%;
+  }
 }
 </style> 

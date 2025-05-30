@@ -3,18 +3,8 @@
     <!-- 页面标题 -->
     <div class="header">
       <div class="header-top">
-        <h1>少数民族民俗体育IP分析仪表板</h1>
+        <h1>少数民族民俗体育IP分析仪表盘</h1>
         <div class="header-actions">
-          <router-link to="/ip-management" class="header-btn management-btn">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <path d="M14 2v6h6"/>
-              <path d="M16 13H8"/>
-              <path d="M16 17H8"/>
-              <path d="M10 9H8"/>
-            </svg>
-            <span>数据管理</span>
-          </router-link>
           <button @click="performComprehensiveAnalysis" class="header-btn analysis-btn" :disabled="selectedIPs.length < 2">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
@@ -375,7 +365,6 @@ const showFilterPanel = ref(false);
 // IP数据和选择
 const ips = ref<IP[]>([]);
 const selectedIPs = ref<string[]>([]);
-const selectedGroup = ref('全部');
 const groups = ref<string[]>(['全部']);
 
 // IP筛选
@@ -499,9 +488,7 @@ const loadIndicatorStructure = async () => {
 const loadGroups = async () => {
   try {
     const response = await ipApi.getGroups();
-    if (response.data) {
-      groups.value = response.data;
-    }
+    // groups变量暂时保留，可能在未来版本中使用
   } catch (error) {
     console.error('加载组别失败:', error);
   }
@@ -986,62 +973,141 @@ const renderSHAPChart = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // 创建SHAP特征贡献度蜂群图
-    if (shapResult.value.mean_shap_values && shapResult.value.feature_names) {
-      const featureNames = shapResult.value.feature_names;
-      const meanShapValues = shapResult.value.mean_shap_values;
+    // 创建蜂群图数据
+    const datasets: any[] = [];
+    const colors = [
+      'rgba(255, 99, 132, 0.8)',   // 红色
+      'rgba(54, 162, 235, 0.8)',   // 蓝色  
+      'rgba(255, 205, 86, 0.8)',   // 黄色
+      'rgba(75, 192, 192, 0.8)',   // 青色
+      'rgba(153, 102, 255, 0.8)',  // 紫色
+      'rgba(255, 159, 64, 0.8)',   // 橙色
+      'rgba(199, 199, 199, 0.8)',  // 灰色
+      'rgba(83, 102, 255, 0.8)'    // 靛蓝色
+    ];
+    
+    // 为每个IP创建一个数据集
+    shapResult.value.ip_explanations?.forEach((explanation: any, ipIndex: number) => {
+      const swarmData: any[] = [];
+      const shapValues = explanation.shap_values || [];
       
-      // 按SHAP值排序，取前10个最重要的特征
-      const sortedFeatures = featureNames
-        .map((name: string, index: number) => ({
-          name,
-          value: Math.abs(meanShapValues[index])
-        }))
-        .sort((a: any, b: any) => b.value - a.value)
-        .slice(0, 10);
+      // 处理嵌套数组格式的SHAP值
+      const flattenedShapValues = Array.isArray(shapValues[0]) 
+        ? shapValues.map((arr: any[]) => arr[0]) // 如果是嵌套数组，取第一个元素
+        : shapValues; // 如果已经是平坦数组，直接使用
       
-      new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: sortedFeatures.map((item: any) => item.name),
-          datasets: [{
-            label: 'SHAP特征贡献度',
-            data: sortedFeatures.map((item: any) => item.value),
-            backgroundColor: 'rgba(153, 102, 255, 0.8)',
-            borderColor: 'rgba(153, 102, 255, 1)',
-            borderWidth: 1
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            title: {
-              display: true,
-              text: 'SHAP特征贡献度分析'
+      // 为每个特征创建散点数据，添加轻微的Y轴偏移来模拟蜂群效果
+      flattenedShapValues.forEach((shapValue: number, featureIndex: number) => {
+        if (typeof shapValue === 'number' && !isNaN(shapValue)) {
+          // 计算蜂群偏移：基于IP索引和特征索引创建分布
+          const baseOffset = (ipIndex - shapResult.value.ip_explanations.length / 2) * 0.02;
+          const randomOffset = (Math.random() - 0.5) * 0.02;
+          const yOffset = baseOffset + randomOffset;
+          
+          swarmData.push({
+            x: featureIndex,
+            y: shapValue + yOffset,
+            originalValue: shapValue,
+            ip: explanation.name,
+            feature: shapResult.value.feature_names[featureIndex]
+          });
+        }
+      });
+      
+      if (swarmData.length > 0) {
+        datasets.push({
+          label: explanation.name,
+          data: swarmData,
+          backgroundColor: colors[ipIndex % colors.length],
+          borderColor: colors[ipIndex % colors.length].replace('0.8', '1'),
+          borderWidth: 2,
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          showLine: false
+        });
+      }
+    });
+    
+    new Chart(ctx, {
+      type: 'scatter',
+      data: { datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'SHAP特征贡献度蜂群图'
+          },
+          tooltip: {
+            callbacks: {
+              title: function(context: any) {
+                const point = context[0];
+                return `${point.dataset.label} - ${point.raw.feature}`;
+              },
+              label: function(context: any) {
+                const point = context.raw;
+                return `SHAP值: ${point.originalValue.toFixed(4)}`;
+              }
             }
           },
-          scales: {
-            y: {
-              beginAtZero: true,
-              title: {
-                display: true,
-                text: 'SHAP值(绝对值)'
+          legend: {
+            display: true,
+            position: 'bottom' as const,
+            labels: {
+              usePointStyle: true,
+              pointStyle: 'circle',
+              padding: 20,
+              font: {
+                size: 13,
+                weight: 'bold' as const
+              },
+              boxWidth: 12,
+              boxHeight: 12
+            },
+            maxHeight: 100
+          }
+        },
+        scales: {
+          x: {
+            type: 'linear',
+            position: 'bottom',
+            title: {
+              display: true,
+              text: '特征索引'
+            },
+            ticks: {
+              stepSize: 1,
+              callback: function(value: any) {
+                const index = Math.round(value);
+                return shapResult.value.feature_names[index] || '';
               }
             },
-            x: {
-              title: {
-                display: true,
-                text: '特征指标'
-              },
-              ticks: {
-                maxRotation: 45
+            min: -0.5,
+            max: shapResult.value.feature_names.length - 0.5
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'SHAP值'
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.1)'
+            },
+            beginAtZero: false,
+            ticks: {
+              callback: function(value: any) {
+                return value.toFixed(2);
               }
             }
           }
+        },
+        interaction: {
+          intersect: false,
+          mode: 'point' as const
         }
-      });
-    }
+      }
+    });
   });
 };
 
@@ -1129,26 +1195,6 @@ const generateAdvancedClusteringVisualizationFromData = async (data: any): Promi
   }
 };
 
-const generateAdvancedClusteringVisualization = async () => {
-  if (!advancedClusterResult.value) return;
-  
-  try {
-    const response = await pythonMLApi.generateAdvancedPlot('clustering_with_hull', {
-      clustering_results: advancedClusterResult.value.clustering_results,
-      convex_hulls: advancedClusterResult.value.convex_hulls
-    });
-    
-    if (response.success) {
-      advancedClusterImage.value = response.image;
-    } else {
-      addLog(`生成聚类图表失败: ${response.error}`);
-    }
-  } catch (error) {
-    console.error('生成高级聚类图表错误:', error);
-    addLog('生成聚类图表失败');
-  }
-};
-
 // 筛选和IP选择相关方法
 const toggleFilterPanel = () => {
   showFilterPanel.value = !showFilterPanel.value;
@@ -1196,9 +1242,13 @@ const toggleIPSelection = (ipId: string) => {
   addLog(`IP选择已更新: 当前选中${selectedIPs.value.length}个IP`);
 };
 
-const selectAllIPs = () => {
-  selectedIPs.value = ips.value.map(ip => ip.id);
-  addLog(`已选择全部${selectedIPs.value.length}个IP`);
+const selectAllFilteredIPs = () => {
+  selectedIPs.value = filteredIPs.value.map(ip => ip.id);
+  addLog(`已选择当前筛选的全部${selectedIPs.value.length}个IP`);
+};
+
+const isIPSelected = (ipId: string) => {
+  return selectedIPs.value.includes(ipId);
 };
 
 const clearSelection = () => {
@@ -1213,15 +1263,6 @@ const updateFilteredIPs = () => {
     filteredIPs.value = ips.value.filter(ip => ip.group === ipGroupFilter.value);
   }
   addLog(`筛选组别: ${ipGroupFilter.value}, 显示${filteredIPs.value.length}个IP`);
-};
-
-const selectAllFilteredIPs = () => {
-  selectedIPs.value = filteredIPs.value.map(ip => ip.id);
-  addLog(`已选择当前筛选的全部${selectedIPs.value.length}个IP`);
-};
-
-const isIPSelected = (ipId: string) => {
-  return selectedIPs.value.includes(ipId);
 };
 </script>
 
@@ -1279,10 +1320,6 @@ const isIPSelected = (ipId: string) => {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
-}
-
-.header-btn.management-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .header-btn.analysis-btn {
@@ -1564,12 +1601,12 @@ const isIPSelected = (ipId: string) => {
 }
 
 .log-content::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: #888;
   border-radius: 3px;
 }
 
 .log-content::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: #555;
 }
 
 .log-entry {
@@ -1693,7 +1730,7 @@ const isIPSelected = (ipId: string) => {
   color: #495057;
   font-size: 18px;
   font-weight: 600;
-  text-align: center;
+    text-align: center;
   position: relative;
 }
 
@@ -1796,7 +1833,7 @@ const isIPSelected = (ipId: string) => {
   position: sticky;
   top: 20px;
   display: flex;
-  flex-direction: column;
+    flex-direction: column;
 }
 
 .sidebar-header {
@@ -1873,8 +1910,8 @@ const isIPSelected = (ipId: string) => {
   cursor: pointer;
   transition: all 0.2s ease;
   flex: 1;
-  text-align: center;
-}
+    text-align: center;
+  }
 
 .btn-sm {
   padding: 6px 12px;
@@ -1916,17 +1953,21 @@ const isIPSelected = (ipId: string) => {
 }
 
 .ip-list-container::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 
 .ip-list-container::-webkit-scrollbar-track {
   background: #f1f1f1;
-  border-radius: 2px;
+  border-radius: 3px;
 }
 
 .ip-list-container::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 2px;
+  background: #888;
+  border-radius: 3px;
+}
+
+.ip-list-container::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 .ip-item {
