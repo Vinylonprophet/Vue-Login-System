@@ -467,7 +467,7 @@ function parseExpertScoreData(excelData) {
         
         // 查找专家列 (expert_专家1, expert_专家2, ...)
         Object.keys(firstRow).forEach(key => {
-            if (key.startsWith('expert_专家')) {
+            if (key.startsWith('expert_')) {
                 expertColumns.push(key);
             }
         });
@@ -530,8 +530,8 @@ function parseExpertScoreData(excelData) {
     
     expertColumns.forEach(expertColumn => {
         // 提取专家名称 (去掉expert_前缀)
-        const expertName = expertColumn.replace('expert_专家', '专家');
-        const ipName = `${groupName}${expertName}`;
+        const expertName = expertColumn.replace('expert_', '');
+        const ipName = `${groupName}_${expertName}`;
         
         console.log(`创建IP: ${ipName}, 组别: ${groupName}`);
         
