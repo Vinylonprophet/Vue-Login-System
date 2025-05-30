@@ -26,90 +26,90 @@
       </div>
       <div class="stats-bar">
         <div class="stats-container">
-          <div class="stat-item">
+        <div class="stat-item">
             <div class="stat-icon">📊</div>
             <div class="stat-content">
               <span class="stat-label">总IP数量</span>
-              <span class="stat-value">{{ statistics.totalIPs }}</span>
+          <span class="stat-value">{{ statistics.totalIPs }}</span>
             </div>
-          </div>
-          <div class="stat-item">
+        </div>
+        <div class="stat-item">
             <div class="stat-icon">🏷️</div>
             <div class="stat-content">
               <span class="stat-label">组别数量</span>
-              <span class="stat-value">{{ statistics.totalGroups }}</span>
+          <span class="stat-value">{{ statistics.totalGroups }}</span>
             </div>
-          </div>
-          <div class="stat-item">
+        </div>
+        <div class="stat-item">
             <div class="stat-icon">📈</div>
             <div class="stat-content">
               <span class="stat-label">分析次数</span>
-              <span class="stat-value">{{ statistics.totalEvaluations }}</span>
+          <span class="stat-value">{{ statistics.totalEvaluations }}</span>
             </div>
           </div>
         </div>
         <div class="stats-actions">
           <div class="quick-stats">
             <span class="update-time">更新于 {{ new Date().toLocaleTimeString() }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 筛选面板 -->
-      <div class="filter-section" v-show="showFilterPanel">
-        <h3>筛选条件</h3>
-        
-        <!-- 一级指标 -->
-        <div class="indicator-group">
-          <h4>一级指标</h4>
-          <div class="checkbox-group">
-            <label v-for="indicator in indicatorStructure.firstLevel" :key="indicator" class="checkbox-label">
-              <input 
-                type="checkbox" 
-                v-model="selectedFirstLevel"
-                :value="indicator"
-                @change="updateFilteredIndicators"
-              />
-              {{ indicator }}
-            </label>
-          </div>
-        </div>
-
-        <!-- 二级指标 -->
-        <div class="indicator-group">
-          <h4>二级指标</h4>
-          <div class="checkbox-group">
-            <label v-for="indicator in indicatorStructure.secondLevel" :key="indicator" class="checkbox-label">
-              <input 
-                type="checkbox" 
-                v-model="selectedSecondLevel"
-                :value="indicator"
-                @change="updateFilteredIndicators"
-              />
-              {{ indicator }}
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <!-- 数据录入面板 -->
-      <div class="input-section" v-show="showDataEntryPanel">
-        <h3>数据输入（三级指标）</h3>
-        <div class="indicator-inputs">
-          <div v-for="indicator in filteredThirdIndicators" :key="indicator" class="input-group">
-            <label>{{ indicator }}</label>
-            <input 
-              type="number" 
-              v-model.number="indicatorValues[indicator]"
-              step="0.1"
-              min="0"
-              max="100"
-              placeholder="请输入评分"
-            />
-          </div>
         </div>
       </div>
     </div>
+
+      <!-- 筛选面板 -->
+      <div class="filter-section" v-show="showFilterPanel">
+          <h3>筛选条件</h3>
+          
+          <!-- 一级指标 -->
+          <div class="indicator-group">
+            <h4>一级指标</h4>
+            <div class="checkbox-group">
+              <label v-for="indicator in indicatorStructure.firstLevel" :key="indicator" class="checkbox-label">
+                <input 
+                  type="checkbox" 
+                  v-model="selectedFirstLevel"
+                  :value="indicator"
+                  @change="updateFilteredIndicators"
+                />
+                {{ indicator }}
+              </label>
+            </div>
+          </div>
+
+          <!-- 二级指标 -->
+          <div class="indicator-group">
+            <h4>二级指标</h4>
+            <div class="checkbox-group">
+              <label v-for="indicator in indicatorStructure.secondLevel" :key="indicator" class="checkbox-label">
+                <input 
+                  type="checkbox" 
+                  v-model="selectedSecondLevel"
+                  :value="indicator"
+                  @change="updateFilteredIndicators"
+                />
+                {{ indicator }}
+              </label>
+            </div>
+          </div>
+        </div>
+
+      <!-- 数据录入面板 -->
+      <div class="input-section" v-show="showDataEntryPanel">
+          <h3>数据输入（三级指标）</h3>
+          <div class="indicator-inputs">
+            <div v-for="indicator in filteredThirdIndicators" :key="indicator" class="input-group">
+              <label>{{ indicator }}</label>
+              <input 
+                type="number" 
+                v-model.number="indicatorValues[indicator]"
+                step="0.1"
+                min="0"
+                max="100"
+                placeholder="请输入评分"
+              />
+            </div>
+          </div>
+        </div>
+        </div>
 
     <!-- 主要内容区域 -->
     <div class="main-content">
@@ -194,7 +194,13 @@
             <div class="chart">
               <canvas id="nnLossChart" ref="nnLossChart" v-if="neuralNetworkResult"></canvas>
               <div v-else class="chart-placeholder">
-                点击"神经网络训练"按钮后显示训练损失曲线
+                <span v-if="ips.length < 5">
+                  🚫 IP数量不足（当前{{ips.length}}个，需要≥5个）<br>
+                  无法进行神经网络训练分析
+                </span>
+                <span v-else>
+                  点击"全面分析"按钮后显示神经网络训练损失曲线
+                </span>
               </div>
             </div>
           </div>
@@ -205,18 +211,30 @@
             <div class="chart">
               <canvas id="featureImportanceChart" ref="featureImportanceChart" v-if="neuralNetworkResult"></canvas>
               <div v-else class="chart-placeholder">
-                点击"神经网络训练"按钮后显示特征重要性分析
+                <span v-if="ips.length < 5">
+                  🚫 IP数量不足（当前{{ips.length}}个，需要≥5个）<br>
+                  无法进行特征重要性分析
+                </span>
+                <span v-else>
+                  点击"全面分析"按钮后显示特征重要性分析
+                </span>
               </div>
             </div>
           </div>
 
           <!-- SHAP值可视化 -->
           <div class="chart-panel">
-            <h3>SHAP特征贡献度</h3>
+            <h3>SHAP特征贡献度蜂群图</h3>
             <div class="chart">
               <canvas id="shapChart" ref="shapChart" v-if="shapResult"></canvas>
               <div v-else class="chart-placeholder">
-                点击"SHAP模型解释"按钮后显示特征贡献度分析
+                <span v-if="ips.length < 3">
+                  🚫 IP数量不足（当前{{ips.length}}个，需要≥3个）<br>
+                  无法进行SHAP特征贡献度分析
+                </span>
+                <span v-else>
+                  点击"全面分析"按钮后显示SHAP特征贡献度蜂群图
+                </span>
               </div>
             </div>
           </div>
@@ -227,7 +245,13 @@
             <div class="chart">
               <canvas id="pcaChart" ref="pcaChart" v-if="pcaResult"></canvas>
               <div v-else class="chart-placeholder">
-                点击"PCA降维分析"按钮后显示降维可视化图表
+                <span v-if="ips.length < 2">
+                  🚫 IP数量不足（当前{{ips.length}}个，需要≥2个）<br>
+                  无法进行PCA降维分析
+                </span>
+                <span v-else>
+                  点击"全面分析"按钮后显示PCA降维可视化图表
+                </span>
               </div>
             </div>
           </div>
@@ -634,8 +658,16 @@ const performComprehensiveAnalysis = async () => {
     loading.value = true;
     loadingText.value = '全面分析中...';
     
+    // 清空所有之前的ML分析结果，避免显示旧数据造成误解
+    neuralNetworkResult.value = null;
+    shapResult.value = null;
+    pcaResult.value = null;
+    advancedClusterResult.value = null;
+    advancedClusterImage.value = '';
+    
     // 添加调试日志
     addLog('=== 开始全面分析 ===');
+    addLog(`当前IP数量: ${ips.value.length}`);
     addLog(`选择的组别: ${selectedGroup.value}`);
     addLog(`筛选的指标数量: ${filteredThirdIndicators.value.length}`);
     addLog(`筛选的指标: ${filteredThirdIndicators.value.join(', ')}`);
@@ -653,7 +685,7 @@ const performComprehensiveAnalysis = async () => {
       response.data.evaluation.forEach(result => {
         addLog(`${result.rank}. ${result.name}: ${result.score.toFixed(2)} (±${result.error.toFixed(2)})`);
       });
-
+      
       // 更新IP列表中的评分
       ips.value.forEach((ip) => {
         const result = response.data?.evaluation.find(r => r.name === ip.name);
@@ -661,7 +693,7 @@ const performComprehensiveAnalysis = async () => {
           (ip as any).score = result.score;
         }
       });
-
+      
       // 渲染基础图表
       await nextTick();
       addLog(`📋 评估结果数据: 
@@ -676,7 +708,11 @@ const performComprehensiveAnalysis = async () => {
       addLog('🔄 开始神经网络训练...');
       loadingText.value = '神经网络训练中...';
       try {
-        const nnResponse = await pythonMLApi.trainNeuralNetwork(ips.value);
+        // 获取当前使用的指标名称
+        const currentFeatureNames = filteredThirdIndicators.value.length > 0 
+          ? filteredThirdIndicators.value 
+          : indicatorStructure.value.allThird;
+        const nnResponse = await pythonMLApi.trainNeuralNetwork(ips.value, currentFeatureNames);
         if (nnResponse.success && nnResponse.data) {
           neuralNetworkResult.value = nnResponse.data;
           await nextTick();
@@ -684,8 +720,8 @@ const performComprehensiveAnalysis = async () => {
           addLog('✅ 神经网络训练完成');
         } else {
           addLog(`⚠️ 神经网络训练失败: ${nnResponse.error || '未知错误'}`);
-        }
-      } catch (error) {
+    }
+  } catch (error) {
         addLog(`⚠️ 神经网络训练失败: ${error}`);
       }
     } else {
@@ -697,14 +733,19 @@ const performComprehensiveAnalysis = async () => {
       addLog('🔄 开始SHAP模型解释...');
       loadingText.value = 'SHAP分析中...';
       try {
-        const shapResponse = await pythonMLApi.shapExplain(ips.value);
-        if (shapResponse.success && shapResponse.data) {
-          shapResult.value = shapResponse.data;
+        // 获取当前使用的指标名称
+        const currentFeatureNames = filteredThirdIndicators.value.length > 0 
+          ? filteredThirdIndicators.value 
+          : indicatorStructure.value.allThird;
+        const response = await pythonMLApi.shapExplain(ips.value, currentFeatureNames);
+        if (response.success && response.data) {
+          // 保存结果
+          shapResult.value = response.data;
           await nextTick();
           renderSHAPChart();
           addLog('✅ SHAP模型解释完成');
         } else {
-          addLog(`⚠️ SHAP分析失败: ${shapResponse.error || '未知错误'}`);
+          addLog(`⚠️ SHAP分析失败: ${response.error || '未知错误'}`);
         }
       } catch (error) {
         addLog(`⚠️ SHAP分析失败: ${error}`);
@@ -718,14 +759,30 @@ const performComprehensiveAnalysis = async () => {
       addLog('🔄 开始PCA降维分析...');
       loadingText.value = 'PCA分析中...';
       try {
-        const pcaResponse = await pythonMLApi.pcaAnalysis(ips.value);
-        if (pcaResponse.success && pcaResponse.pca_results) {
+        const pcaResponse = await pythonMLApi.pcaAnalysis(ips.value, 2);
+        if (pcaResponse.success) {
+          // 保存结果
           pcaResult.value = pcaResponse;
-          await nextTick();
-          renderPCAChart();
-          addLog('✅ PCA降维分析完成');
+          
+          addLog('=== PCA降维分析完成 ===');
+          addLog(`降维维度: ${pcaResponse.n_components}`);
+          addLog(`总方差解释比例: ${(pcaResponse.total_variance_explained * 100).toFixed(2)}%`);
+          addLog('各主成分方差解释比例:');
+          pcaResponse.explained_variance_ratio.forEach((ratio: number, index: number) => {
+            addLog(`主成分${index + 1}: ${(ratio * 100).toFixed(2)}%`);
+          });
+          
+          addLog('PCA降维结果:');
+          pcaResponse.pca_results.forEach((result: any) => {
+            addLog(`${result.name}: [${result.coordinates.map((c: number) => c.toFixed(3)).join(', ')}]`);
+          });
+          
+          // 渲染PCA图表
+          nextTick(() => {
+            renderPCAChart();
+          });
         } else {
-          addLog(`⚠️ PCA分析失败: ${pcaResponse.error || '未知错误'}`);
+          addLog(`⚠️ PCA分析失败: ${pcaResponse.error}`);
         }
       } catch (error) {
         addLog(`⚠️ PCA分析失败: ${error}`);
@@ -739,12 +796,31 @@ const performComprehensiveAnalysis = async () => {
       addLog('🔄 开始高级聚类分析...');
       loadingText.value = '聚类分析中...';
       try {
-        const clusterResponse = await pythonMLApi.advancedClustering(ips.value);
+        const clusterResponse = await pythonMLApi.advancedClustering(ips.value, 2, true);
         if (clusterResponse.success && clusterResponse.data) {
           advancedClusterResult.value = clusterResponse.data;
+          
+          addLog('=== 高级聚类分析完成 ===');
+          addLog(`聚类数量: 2`);
+          addLog(`轮廓系数: ${clusterResponse.data.quality_metrics?.silhouette_score?.toFixed(4) || 'N/A (样本数不足)'}`);
+          addLog(`Calinski-Harabasz指数: ${clusterResponse.data.quality_metrics?.calinski_harabasz_score?.toFixed(4) || 'N/A (样本数不足)'}`);
+          
+          if (clusterResponse.data.pca_info?.used && clusterResponse.data.pca_info?.variance_explained) {
+            addLog(`PCA方差解释: ${clusterResponse.data.pca_info.variance_explained.map((v: number) => (v * 100).toFixed(1) + '%').join(', ')}`);
+          }
+          
+          addLog('聚类结果:');
+          clusterResponse.data.clustering_results?.forEach((result: any) => {
+            addLog(`${result.name}: 簇${result.cluster + 1} (距离质心: ${result.distance_to_centroid.toFixed(3)})`);
+          });
+          
+          addLog('凸包信息:');
+          clusterResponse.data.convex_hulls?.forEach((hull: any) => {
+            addLog(`簇${hull.cluster_id + 1}: 面积 ${hull.area.toFixed(3)}`);
+          });
+          
           await nextTick();
           generateAdvancedClusteringVisualization();
-          addLog('✅ 高级聚类分析完成');
         } else {
           addLog(`⚠️ 聚类分析失败: ${clusterResponse.error || '未知错误'}`);
         }
@@ -928,7 +1004,7 @@ const renderCharts = () => {
     }
     
     // 4. 聚类分析图
-    if (clusteringResult.value) {
+  if (clusteringResult.value) {
       addLog('🔗 渲染聚类分析图');
       renderClusterChart();
     } else {
@@ -1215,7 +1291,11 @@ const trainNeuralNetwork = async () => {
     loading.value = true;
     loadingText.value = '神经网络训练中...';
     
-    const response = await pythonMLApi.trainNeuralNetwork(ips.value);
+    // 获取当前使用的指标名称
+    const currentFeatureNames = filteredThirdIndicators.value.length > 0 
+      ? filteredThirdIndicators.value 
+      : indicatorStructure.value.allThird;
+    const response = await pythonMLApi.trainNeuralNetwork(ips.value, currentFeatureNames);
     if (response.success && response.data) {
       // 保存结果
       neuralNetworkResult.value = response.data;
@@ -1259,7 +1339,11 @@ const performSHAPAnalysis = async () => {
     loading.value = true;
     loadingText.value = 'SHAP模型解释中...';
     
-    const response = await pythonMLApi.shapExplain(ips.value);
+    // 获取当前使用的指标名称
+    const currentFeatureNames = filteredThirdIndicators.value.length > 0 
+      ? filteredThirdIndicators.value 
+      : indicatorStructure.value.allThird;
+    const response = await pythonMLApi.shapExplain(ips.value, currentFeatureNames);
     if (response.success && response.data) {
       // 保存结果
       shapResult.value = response.data;
@@ -1469,10 +1553,15 @@ const renderNeuralNetworkCharts = () => {
     Chart.getChart(importanceCanvas)?.destroy();
     const ctx = importanceCanvas.getContext('2d');
     if (ctx) {
+      // 获取完整的指标名称
+      const featureLabels = filteredThirdIndicators.value.length > 0 
+        ? filteredThirdIndicators.value 
+        : indicatorStructure.value.allThird;
+      
       new Chart(ctx, {
         type: 'bar',
         data: {
-          labels: neuralNetworkResult.value.feature_importance.map((_: any, index: number) => `指标${index + 1}`),
+          labels: featureLabels.slice(0, neuralNetworkResult.value.feature_importance.length),
           datasets: [{
             label: '特征重要性',
             data: neuralNetworkResult.value.feature_importance,
@@ -1502,6 +1591,10 @@ const renderNeuralNetworkCharts = () => {
               title: {
                 display: true,
                 text: '特征指标'
+              },
+              ticks: {
+                maxRotation: 45,
+                minRotation: 45
               }
             }
           }
@@ -1519,45 +1612,138 @@ const renderSHAPChart = () => {
     Chart.getChart(shapCanvas)?.destroy();
     const ctx = shapCanvas.getContext('2d');
     if (ctx) {
+      // 创建蜂群图数据
+      const datasets: any[] = [];
+      const colors = [
+        'rgba(255, 99, 132, 0.8)',   // 红色
+        'rgba(54, 162, 235, 0.8)',   // 蓝色  
+        'rgba(255, 205, 86, 0.8)',   // 黄色
+        'rgba(75, 192, 192, 0.8)',   // 青色
+        'rgba(153, 102, 255, 0.8)',  // 紫色
+        'rgba(255, 159, 64, 0.8)',   // 橙色
+        'rgba(199, 199, 199, 0.8)',  // 灰色
+        'rgba(83, 102, 255, 0.8)'    // 靛蓝色
+      ];
+      
+      // 为每个IP创建一个数据集
+      shapResult.value.ip_explanations?.forEach((explanation: any, ipIndex: number) => {
+        const swarmData: any[] = [];
+        const shapValues = explanation.shap_values || [];
+        
+        // 处理嵌套数组格式的SHAP值
+        const flattenedShapValues = Array.isArray(shapValues[0]) 
+          ? shapValues.map((arr: any[]) => arr[0]) // 如果是嵌套数组，取第一个元素
+          : shapValues; // 如果已经是平坦数组，直接使用
+        
+        // 为每个特征创建散点数据，添加轻微的Y轴偏移来模拟蜂群效果
+        flattenedShapValues.forEach((shapValue: number, featureIndex: number) => {
+          if (typeof shapValue === 'number' && !isNaN(shapValue)) {
+            // 计算蜂群偏移：基于IP索引和特征索引创建分布
+            const baseOffset = (ipIndex - shapResult.value.ip_explanations.length / 2) * 0.02;
+            const randomOffset = (Math.random() - 0.5) * 0.02;
+            const yOffset = baseOffset + randomOffset;
+            
+            swarmData.push({
+              x: featureIndex,
+              y: shapValue + yOffset,
+              originalValue: shapValue,
+              ip: explanation.name,
+              feature: shapResult.value.feature_names[featureIndex]
+            });
+          }
+        });
+        
+        if (swarmData.length > 0) {
+          datasets.push({
+            label: explanation.name,
+            data: swarmData,
+            backgroundColor: colors[ipIndex % colors.length],
+            borderColor: colors[ipIndex % colors.length].replace('0.8', '1'),
+            borderWidth: 2,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            showLine: false
+          });
+        }
+      });
+      
       new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: shapResult.value.feature_names,
-          datasets: [{
-            label: '平均SHAP值',
-            data: shapResult.value.mean_shap_values.map((v: number) => Math.abs(v)),
-            backgroundColor: shapResult.value.mean_shap_values.map((v: number) => 
-              v >= 0 ? 'rgba(54, 162, 235, 0.8)' : 'rgba(255, 99, 132, 0.8)'
-            ),
-            borderColor: shapResult.value.mean_shap_values.map((v: number) => 
-              v >= 0 ? 'rgba(54, 162, 235, 1)' : 'rgba(255, 99, 132, 1)'
-            ),
-            borderWidth: 1
-          }]
-        },
+        type: 'scatter',
+        data: { datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
             title: {
               display: true,
-              text: 'SHAP特征贡献度分析'
+              text: 'SHAP特征贡献度蜂群图'
+            },
+            tooltip: {
+              callbacks: {
+                title: function(context: any) {
+                  const point = context[0];
+                  return `${point.dataset.label} - ${point.raw.feature}`;
+                },
+                label: function(context: any) {
+                  const point = context.raw;
+                  return `SHAP值: ${point.originalValue.toFixed(4)}`;
+                }
+              }
+            },
+            legend: {
+              display: true,
+              position: 'bottom' as const,
+              labels: {
+                usePointStyle: true,
+                pointStyle: 'circle',
+                padding: 20,
+                font: {
+                  size: 13,
+                  weight: 'bold' as const
+                },
+                boxWidth: 12,
+                boxHeight: 12
+              },
+              maxHeight: 100
             }
           },
           scales: {
-            y: {
-              beginAtZero: true,
-              title: {
-                display: true,
-                text: 'SHAP值绝对值'
-              }
-            },
             x: {
+              type: 'linear',
+              position: 'bottom',
               title: {
                 display: true,
-                text: '特征'
+                text: '特征索引'
+              },
+              ticks: {
+                stepSize: 1,
+                callback: function(value: any) {
+                  const index = Math.round(value);
+                  return shapResult.value.feature_names[index] || '';
+                }
+              },
+              min: -0.5,
+              max: shapResult.value.feature_names.length - 0.5
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'SHAP值'
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.1)'
+              },
+              beginAtZero: false,
+              ticks: {
+                callback: function(value: any) {
+                  return value.toFixed(2);
+                }
               }
             }
+          },
+          interaction: {
+            intersect: false,
+            mode: 'point' as const
           }
         }
       });
@@ -2061,7 +2247,7 @@ const generateAdvancedClusteringVisualization = async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
-  min-height: 600px;
+  min-height: 700px;
 }
 
 .chart-panel {
@@ -2078,7 +2264,7 @@ const generateAdvancedClusteringVisualization = async () => {
 }
 
 .chart {
-  height: 200px;
+  height: 280px;
   background: #f8f9fa;
   border-radius: 4px;
   display: flex;
@@ -2277,7 +2463,7 @@ const generateAdvancedClusteringVisualization = async () => {
 
 .chart-placeholder {
   width: 100%;
-  height: 200px;
+  height: 280px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -2289,6 +2475,17 @@ const generateAdvancedClusteringVisualization = async () => {
   padding: 20px;
   font-size: 12px;
   line-height: 1.4;
+}
+
+.chart-placeholder span {
+  display: block;
+  line-height: 1.5;
+}
+
+.chart-placeholder span:first-child {
+  color: #e74c3c;
+  font-weight: bold;
+  font-style: normal;
 }
 
 /* 主布局样式 */

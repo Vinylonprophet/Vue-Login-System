@@ -103,6 +103,7 @@ def train_neural_network():
     try:
         data = request.json
         ips_data = data.get('ips', [])
+        feature_names = data.get('feature_names', [])  # 接收指标名称
         
         if len(ips_data) < 5:
             return jsonify({'error': 'IP数量太少（<5），无法进行神经网络训练'}), 400
@@ -180,33 +181,39 @@ def train_neural_network():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/shap/explain', methods=['POST'])
-def shap_explanation():
-    """使用SHAP解释模型预测结果"""
+def shap_explain():
+    """SHAP模型解释"""
     try:
         data = request.json
         ips_data = data.get('ips', [])
+        feature_names = data.get('feature_names', [])  # 接收指标名称
         
-        if len(ips_data) < 2:
-            return jsonify({'error': 'IP数量太少，无法进行SHAP解释'}), 400
+        if len(ips_data) < 3:
+            return jsonify({'error': 'SHAP解释需要至少3个IP'}), 400
         
-        # 准备数据
-        X = np.array([ip['indicators'] for ip in ips_data], dtype=np.float32)
+        # 构建特征矩阵
+        X = []
+        for ip in ips_data:
+            indicators = ip.get('indicators', [])
+            if not indicators:
+                return jsonify({'error': f'IP {ip.get("name", "未知")} 缺少指标数据'}), 400
+            X.append(indicators)
         
-        if X.shape[1] < 2:
-            return jsonify({'error': '指标数量太少，无法进行SHAP解释'}), 400
-        
-        # 生成目标值
-        Y = np.random.rand(X.shape[0], 1) * 100
-        
-        # 数据归一化
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        
-        X_tensor = torch.tensor(X_scaled, dtype=torch.float32)
-        Y_tensor = torch.tensor(Y, dtype=torch.float32)
-        
-        # 训练模型
+        X = np.array(X, dtype=np.float32)
         input_size = X.shape[1]
+        
+        # 使用传入的指标名称，如果没有则使用默认格式
+        if not feature_names or len(feature_names) != input_size:
+            feature_names = [f'指标{i+1}' for i in range(input_size)]
+        
+        # 创建伪目标变量（综合评分）
+        Y = np.mean(X, axis=1)
+        
+        # 转换为张量
+        X_tensor = torch.FloatTensor(X)
+        Y_tensor = torch.FloatTensor(Y).unsqueeze(1)
+        
+        # 构建和训练神经网络
         model = AdvancedNN(input_size)
         train_nn(model, X_tensor, Y_tensor, epochs=200)
         model.eval()
@@ -236,7 +243,7 @@ def shap_explanation():
             'success': True,
             'mean_shap_values': mean_shap_values.tolist(),
             'ip_explanations': ip_explanations,
-            'feature_names': [f'指标{i+1}' for i in range(input_size)]
+            'feature_names': feature_names  # 返回传入的指标名称
         })
         
     except Exception as e:
@@ -336,8 +343,25 @@ def advanced_clustering():
         # 计算聚类质量指标
         from sklearn.metrics import silhouette_score, calinski_harabasz_score
         
-        silhouette_avg = silhouette_score(X_for_clustering, cluster_labels)
-        calinski_harabasz = calinski_harabasz_score(X_for_clustering, cluster_labels)
+        # 质量指标计算需要特殊处理
+        silhouette_avg = None
+        calinski_harabasz = None
+        
+        try:
+            # 轮廓系数需要至少2个簇且每个簇至少有1个样本，但当每个样本都是单独簇时会失败
+            if len(set(cluster_labels)) > 1 and len(X_for_clustering) > len(set(cluster_labels)):
+                silhouette_avg = silhouette_score(X_for_clustering, cluster_labels)
+            else:
+                print(f"无法计算轮廓系数: 样本数={len(X_for_clustering)}, 簇数={len(set(cluster_labels))}")
+        except Exception as e:
+            print(f"轮廓系数计算失败: {str(e)}")
+            
+        try:
+            # Calinski-Harabasz指数需要至少2个簇
+            if len(set(cluster_labels)) > 1:
+                calinski_harabasz = calinski_harabasz_score(X_for_clustering, cluster_labels)
+        except Exception as e:
+            print(f"Calinski-Harabasz指数计算失败: {str(e)}")
         
         # 为每个聚类计算凸包
         convex_hulls = []
@@ -385,8 +409,8 @@ def advanced_clustering():
             'centroids': centroids.tolist(),
             'convex_hulls': convex_hulls,
             'quality_metrics': {
-                'silhouette_score': float(silhouette_avg),
-                'calinski_harabasz_score': float(calinski_harabasz)
+                'silhouette_score': float(silhouette_avg) if silhouette_avg is not None else None,
+                'calinski_harabasz_score': float(calinski_harabasz) if calinski_harabasz is not None else None
             },
             'pca_info': {
                 'used': use_pca,

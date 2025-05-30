@@ -335,21 +335,21 @@ const PYTHON_ML_API_BASE = 'http://localhost:5001/api';
 // Python ML API 调用函数
 export const pythonMLApi = {
   // 神经网络训练
-  trainNeuralNetwork: (ips: IP[]) => 
+  trainNeuralNetwork: (ips: IP[], featureNames?: string[]) => 
     fetch(`${PYTHON_ML_API_BASE}/neural-network/train`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ips })
+      body: JSON.stringify({ ips, feature_names: featureNames })
     }).then(res => res.json()).then(data => {
       return data.error ? { success: false, error: data.error } : { success: true, data };
     }),
 
   // SHAP模型解释
-  shapExplain: (ips: IP[]) => 
+  shapExplain: (ips: IP[], featureNames?: string[]) => 
     fetch(`${PYTHON_ML_API_BASE}/shap/explain`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ips })
+      body: JSON.stringify({ ips, feature_names: featureNames })
     }).then(res => res.json()).then(data => {
       return data.error ? { success: false, error: data.error } : { success: true, data };
     }),
