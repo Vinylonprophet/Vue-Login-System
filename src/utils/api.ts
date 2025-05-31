@@ -78,8 +78,8 @@ export interface RegisterResponse {
 // IP评估相关接口
 export interface IP {
   id: string;
-  name: string;
-  group: string;
+  project_name: string;
+  group_name: string;
   expert: string;
   indicators: Record<string, number>;
   createdAt: string;
@@ -231,8 +231,8 @@ export const ipApi = {
     apiRequest<ApiResponse<IP[]>>(`/api/ip/ips${group ? `?group=${encodeURIComponent(group)}` : ''}`),
 
   // 获取特定IP的所有专家评分
-  getExpertScoresByIP: (name: string, group: string) =>
-    apiRequest<ApiResponse<IP[]>>(`/api/ip/ips/${encodeURIComponent(name)}/${encodeURIComponent(group)}/experts`),
+  getExpertScoresByIP: (project_name: string, group_name: string) =>
+    apiRequest<ApiResponse<IP[]>>(`/api/ip/ips/${encodeURIComponent(project_name)}/${encodeURIComponent(group_name)}/experts`),
 
   // 添加IP
   addIP: (ip: Omit<IP, 'id' | 'createdAt' | 'updatedAt'>) =>

@@ -158,8 +158,8 @@ def train_neural_network():
         results = []
         for i, ip in enumerate(ips_data):
             results.append({
-                'name': ip['name'],
-                'group': ip['group'],
+                'name': ip['project_name'],
+                'group': ip['group_name'],
                 'predicted_score': float(predictions[i]),
                 'confidence': float(1.0 - abs(predictions[i] - Y[i, 0]) / 100)  # 简化的置信度
             })
@@ -196,7 +196,7 @@ def shap_explain():
         for ip in ips_data:
             indicators = ip.get('indicators', [])
             if not indicators:
-                return jsonify({'error': f'IP {ip.get("name", "未知")} 缺少指标数据'}), 400
+                return jsonify({'error': f'IP {ip.get("project_name", "未知")} 缺少指标数据'}), 400
             X.append(indicators)
         
         X = np.array(X, dtype=np.float32)
@@ -234,7 +234,7 @@ def shap_explain():
         for i, ip in enumerate(ips_data):
             ip_shap = shap_values[i] if len(shap_values.shape) > 1 else shap_values
             ip_explanations.append({
-                'name': ip['name'],
+                'name': ip['project_name'],
                 'shap_values': ip_shap.tolist() if hasattr(ip_shap, 'tolist') else [float(ip_shap)],
                 'predicted_value': float(model(X_tensor[i:i+1]).item())
             })
@@ -263,7 +263,7 @@ def pca_analysis():
         
         # 准备数据
         X = np.array([ip['indicators'] for ip in ips_data])
-        ip_names = [ip['name'] for ip in ips_data]
+        ip_names = [ip['project_name'] for ip in ips_data]
         
         if X.shape[1] < n_components:
             return jsonify({'error': f'指标数量({X.shape[1]})少于降维目标维度({n_components})'}), 400
@@ -289,7 +289,7 @@ def pca_analysis():
             pca_results.append({
                 'name': name,
                 'coordinates': coords.tolist(),
-                'group': ips_data[i].get('group', '未知')
+                'group': ips_data[i].get('group_name', '未知')
             })
         
         return jsonify({
@@ -320,7 +320,7 @@ def advanced_clustering():
         
         # 准备数据
         X = np.array([ip['indicators'] for ip in ips_data])
-        ip_names = [ip['name'] for ip in ips_data]
+        ip_names = [ip['project_name'] for ip in ips_data]
         
         # 数据标准化
         scaler = StandardScaler()
@@ -397,7 +397,7 @@ def advanced_clustering():
         for i, (name, coords, label) in enumerate(zip(ip_names, X_for_clustering, cluster_labels)):
             clustering_results.append({
                 'name': name,
-                'group': ips_data[i].get('group', '未知'),
+                'group': ips_data[i].get('group_name', '未知'),
                 'coordinates': coords.tolist(),
                 'cluster': int(label),
                 'distance_to_centroid': float(np.linalg.norm(coords - centroids[label]))

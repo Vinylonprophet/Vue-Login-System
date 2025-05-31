@@ -155,8 +155,8 @@
               />
             </div>
             <div class="ip-content">
-              <div class="ip-name">{{ ip.name }}</div>
-              <div class="ip-group">{{ ip.group }}</div>
+              <div class="ip-name">{{ ip.project_name }}</div>
+              <div class="ip-group">{{ ip.group_name }}</div>
               <div class="ip-indicators">{{ filteredThirdIndicators.length }}个指标</div>
             </div>
           </div>
@@ -504,7 +504,7 @@ const loadIPs = async () => {
       ips.value = response.data;
       
       // 更新可用组别
-      const groupSet = new Set(ips.value.map(ip => ip.group));
+      const groupSet = new Set(ips.value.map(ip => ip.group_name));
       availableGroups.value = Array.from(groupSet);
       
       // 初始化筛选
@@ -539,7 +539,7 @@ const performComprehensiveAnalysis = async () => {
     if (ip._isGroup) {
       // 这是多专家聚合记录，需要获取所有专家数据并计算平均值
       try {
-        const expertsResponse = await ipApi.getExpertScoresByIP(ip.name, ip.group);
+        const expertsResponse = await ipApi.getExpertScoresByIP(ip.project_name, ip.group_name);
         if (expertsResponse.data && expertsResponse.data.length > 0) {
           const expertScores = expertsResponse.data;
           
@@ -562,8 +562,8 @@ const performComprehensiveAnalysis = async () => {
           });
         }
       } catch (error) {
-        console.error(`获取IP ${ip.name} 的专家数据失败:`, error);
-        addLog(`⚠️ 获取IP "${ip.name}" 的专家数据失败，跳过该IP`);
+        console.error(`获取IP ${ip.project_name} 的专家数据失败:`, error);
+        addLog(`⚠️ 获取IP "${ip.project_name}" 的专家数据失败，跳过该IP`);
       }
     } else {
       // 单一专家记录，直接使用
@@ -602,7 +602,7 @@ const performComprehensiveAnalysis = async () => {
         addLog('=== 开始全面分析 ===');
         addLog(`选中IP数量: ${selectedIPs.value.length}`);
         addLog(`有效分析IP数量: ${selectedIPData.length}`);
-        addLog(`分析IP列表: ${selectedIPData.map(ip => `${ip.name}(${ip.expert})`).join(', ')}`);
+        addLog(`分析IP列表: ${selectedIPData.map(ip => `${ip.project_name}(${ip.expert})`).join(', ')}`);
         
         // 步骤1: 基础评估 - 使用计算好的平均值数据
         const response = await ipApi.evaluateSelected(selectedIPData, filteredThirdIndicators.value);
@@ -1385,7 +1385,7 @@ const updateFilteredIPs = () => {
   if (ipGroupFilter.value === '全部') {
     filteredIPs.value = ips.value;
   } else {
-    filteredIPs.value = ips.value.filter(ip => ip.group === ipGroupFilter.value);
+    filteredIPs.value = ips.value.filter(ip => ip.group_name === ipGroupFilter.value);
   }
   addLog(`筛选组别: ${ipGroupFilter.value}, 显示${filteredIPs.value.length}个IP`);
 };

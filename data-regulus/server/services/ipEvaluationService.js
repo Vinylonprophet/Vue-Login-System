@@ -196,8 +196,8 @@ class IPEvaluationService {
             errors,
             selectedIndicators: currentIndicators, // 添加使用的指标信息
             evaluation: ips.map((ip, idx) => ({
-                name: ip.name,
-                group: ip.group,
+                name: ip.project_name,
+                group: ip.group_name,
                 score: scores[idx],
                 error: errors[idx],
                 rank: idx + 1 // 临时排名，需要排序后更新
@@ -346,8 +346,8 @@ class IPEvaluationService {
         const experts = ['专家A', '专家B', '专家C', '专家D', '专家E'];
         
         for (let i = 0; i < count; i++) {
-            const name = `${sports[i % sports.length]}_测试${i + 1}`;
-            const group = counties[i % counties.length];
+            const project_name = `${sports[i % sports.length]}_测试${i + 1}`;
+            const group_name = counties[i % counties.length];
             const expert = experts[i % experts.length];
             
             // 生成对象格式的指标数据
@@ -357,8 +357,8 @@ class IPEvaluationService {
             });
             
             testIPs.push({
-                name,
-                group,
+                project_name,
+                group_name,
                 expert,
                 indicators
             });
@@ -386,6 +386,11 @@ class IPEvaluationService {
     // 获取所有属性名
     getAllProperties() {
         return this.allProperties;
+    }
+
+    // 获取指标属性映射
+    getIndicatorPropertyMap() {
+        return this.indicatorPropertyMap;
     }
 
     // 将数组格式的指标数据转换为对象格式

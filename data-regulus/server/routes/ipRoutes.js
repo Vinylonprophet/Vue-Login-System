@@ -75,11 +75,11 @@ router.get('/ips', async (req, res) => {
 });
 
 // 获取特定IP的所有专家评分
-router.get('/ips/:name/:group/experts', async (req, res) => {
+router.get('/ips/:project_name/:group_name/experts', async (req, res) => {
     try {
-        const { name, group } = req.params;
+        const { project_name, group_name } = req.params;
         const userId = req.user._id || req.user.id;
-        const expertScores = await ipModel.getExpertScoresByIP(name, group, userId);
+        const expertScores = await ipModel.getExpertScoresByIP(project_name, group_name, userId);
         
         res.json({
             success: true,
@@ -495,6 +495,476 @@ function parseExpertScoreData(excelData) {
     console.log('开始解析Excel数据，行数:', excelData.length);
     console.log('第一行数据:', JSON.stringify(excelData[0], null, 2));
     
+    if (!excelData || excelData.length === 0) {
+        throw new Error('Excel文件中没有数据');
+    }
+
+    const firstRow = excelData[0];
+    console.log('第一行列名:', Object.keys(firstRow));
+    
+    // 检测新的数据结构：每行包含专家名、项目名、组别名和所有指标评分
+    const hasExpertColumn = firstRow.hasOwnProperty('expert');
+    const hasProjectColumn = firstRow.hasOwnProperty('project_name');
+    const hasGroupNameColumn = firstRow.hasOwnProperty('group_name');
+    
+    if (hasExpertColumn && hasProjectColumn && hasGroupNameColumn) {
+        // 新数据结构：每行一个专家的完整评分数据
+        console.log('检测到新数据结构：专家-项目-指标评分');
+        return parseExpertProjectData(excelData);
+    } else if (hasProjectColumn && firstRow.hasOwnProperty('index')) {
+        // 混合数据结构：每行包含项目+指标+多个专家评分
+        console.log('检测到混合数据结构：项目-指标-专家矩阵');
+        return parseProjectIndicatorMatrix(excelData);
+    } else if (hasProjectColumn) {
+        // 项目基础数据结构：每行一个项目，多个专家列
+        return parseProjectBasedData(excelData);
+    } else if (firstRow.hasOwnProperty('index')) {
+        // 旧数据结构：每行一个指标，多个专家列
+        return parseIndicatorBasedData(excelData);
+    } else {
+        throw new Error('无法识别Excel数据结构，请确保包含expert/project_name/group_name列（新格式）、project_name列（项目格式）或index列（旧格式）');
+    }
+}
+
+// 解析新的专家-项目数据结构
+function parseExpertProjectData(excelData) {
+    console.log('解析新的专家-项目数据结构');
+    
+    // 获取系统所有属性列表
+    const allSystemProperties = ipEvaluationService.getAllProperties();
+    console.log('系统属性总数:', allSystemProperties.length);
+    console.log('系统属性列表:', allSystemProperties.slice(0, 5), '...');
+    
+    const ips = [];
+    const expertSet = new Set();
+    const projectSet = new Set();
+    const groupSet = new Set();
+    
+    // 从第一行数据中识别哪些列是指标列
+    const firstRow = excelData[0];
+    const allColumns = Object.keys(firstRow);
+    console.log('Excel中所有列:', allColumns);
+    
+    // 排除非指标列
+    const nonIndicatorColumns = ['expert', 'project_name', 'group_name'];
+    const indicatorColumns = allColumns.filter(col => !nonIndicatorColumns.includes(col));
+    console.log('识别到的指标列:', indicatorColumns);
+    
+    // 创建列名映射表，处理Excel列名与系统属性名不匹配的情况
+    const columnMapping = {};
+    
+    // 为每个指标列找到对应的系统属性
+    const validIndicatorColumns = [];
+    const invalidIndicatorColumns = [];
+    
+    indicatorColumns.forEach(col => {
+        if (allSystemProperties.includes(col)) {
+            // 直接匹配
+            columnMapping[col] = col;
+            validIndicatorColumns.push(col);
+        } else {
+            // 尝试模糊匹配
+            const matchedProperty = allSystemProperties.find(prop => {
+                // 检查是否是截断的列名（如socialPlatformInnovatio）
+                return prop.startsWith(col) || col.startsWith(prop);
+            });
+            
+            if (matchedProperty) {
+                console.log(`列名映射: "${col}" -> "${matchedProperty}"`);
+                columnMapping[col] = matchedProperty;
+                validIndicatorColumns.push(col);
+            } else {
+                invalidIndicatorColumns.push(col);
+            }
+        }
+    });
+    
+    console.log('有效指标列:', validIndicatorColumns);
+    console.log('列名映射表:', columnMapping);
+    if (invalidIndicatorColumns.length > 0) {
+        console.warn('无效指标列（系统中不存在）:', invalidIndicatorColumns);
+    }
+    
+    excelData.forEach((row, rowIndex) => {
+        const expertName = row.expert;
+        const projectName = row.project_name;
+        const groupName = row.group_name;
+        
+        if (!expertName || !projectName || !groupName) {
+            console.warn(`第${rowIndex + 1}行缺少必要信息，跳过：专家=${expertName}, 项目=${projectName}, 组别=${groupName}`);
+            return;
+        }
+        
+        expertSet.add(expertName);
+        projectSet.add(projectName);
+        groupSet.add(groupName);
+        
+        // 构建指标评分数据
+        const indicators = {};
+        
+        // 初始化所有系统属性为0
+        allSystemProperties.forEach(property => {
+            indicators[property] = 0;
+        });
+        
+        // 从Excel行数据中提取指标评分
+        let validScoreCount = 0;
+        validIndicatorColumns.forEach(column => {
+            const score = parseFloat(row[column]);
+            if (!isNaN(score)) {
+                const systemProperty = columnMapping[column];
+                indicators[systemProperty] = score;
+                validScoreCount++;
+            } else {
+                console.warn(`专家 "${expertName}" 在指标 "${column}" 上的评分无效:`, row[column]);
+            }
+        });
+        
+        console.log(`专家 "${expertName}" 有效评分数量: ${validScoreCount}/${validIndicatorColumns.length}`);
+        
+        // 创建IP记录 - 直接使用Excel中的值，不进行拼接
+        const ip = {
+            project_name: projectName,
+            group_name: groupName,
+            expert: expertName,
+            indicators: indicators
+        };
+        
+        ips.push(ip);
+    });
+    
+    console.log(`总共创建了 ${ips.length} 个IP记录`);
+    console.log(`专家数量: ${expertSet.size}, 项目数量: ${projectSet.size}, 组别数量: ${groupSet.size}`);
+    console.log('专家列表:', Array.from(expertSet));
+    console.log('项目列表:', Array.from(projectSet));
+    console.log('组别列表:', Array.from(groupSet));
+    
+    return {
+        ips,
+        expertCount: expertSet.size,
+        indicatorCount: validIndicatorColumns.length,
+        projectCount: projectSet.size,
+        groupCount: groupSet.size
+    };
+}
+
+// 解析混合数据结构：项目-指标-专家矩阵
+function parseProjectIndicatorMatrix(excelData) {
+    console.log('解析混合数据结构：项目-指标-专家矩阵');
+    
+    const firstRow = excelData[0];
+    
+    // 查找所有专家评分列 (expert_博士A, expert_博士B, ...)
+    const expertColumns = [];
+    Object.keys(firstRow).forEach(key => {
+        if (key.startsWith('expert_')) {
+            expertColumns.push(key);
+        }
+    });
+    
+    console.log('发现专家评分列:', expertColumns);
+    
+    if (expertColumns.length === 0) {
+        throw new Error('未找到专家评分列，列名应以"expert_"开头');
+    }
+    
+    // 从列名提取专家标识（去掉expert_前缀）
+    const expertIdentifiers = expertColumns.map(col => col.replace('expert_', ''));
+    console.log('专家标识:', expertIdentifiers);
+    
+    // 验证专家名称不为空
+    expertIdentifiers.forEach(expertId => {
+        if (!expertId || expertId.trim() === '') {
+            throw new Error(`发现空的专家标识，请检查列名格式：${expertColumns.find(col => col.replace('expert_', '') === expertId)}`);
+        }
+    });
+    
+    // 获取系统指标结构
+    const allSystemIndicators = ipEvaluationService.getAllThirdIndicators();
+    const indicatorPropertyMap = ipEvaluationService.getIndicatorPropertyMap();
+    console.log('系统指标总数:', allSystemIndicators.length);
+    
+    // 获取组别信息
+    let groupName = '';
+    if (firstRow.group_name) {
+        groupName = String(firstRow.group_name).trim();
+    } else if (firstRow.county || firstRow.city || firstRow.province) {
+        const locationParts = [firstRow.province, firstRow.city, firstRow.county].filter(Boolean);
+        groupName = locationParts.join('_');
+    } else {
+        groupName = '默认组别';
+    }
+    
+    console.log('组别名称:', groupName);
+    
+    // 统计所有项目名称
+    const allProjects = new Set();
+    excelData.forEach(row => {
+        if (row.project_name) {
+            allProjects.add(row.project_name);
+        }
+    });
+    console.log('Excel中包含的所有项目:', Array.from(allProjects));
+    console.log('项目总数:', allProjects.size);
+    
+    // 按项目和专家组织数据
+    const projectExpertData = {}; // { "项目名_专家名": { indicators: {} } }
+    
+    excelData.forEach((row, rowIndex) => {
+        const projectName = row.project_name;
+        const indicatorName = row.index;
+        
+        if (!projectName || !indicatorName) {
+            console.warn(`第${rowIndex + 1}行缺少项目名称或指标名称，跳过`);
+            return;
+        }
+        
+        // 检查指标是否在系统中存在
+        const propertyName = indicatorPropertyMap[indicatorName];
+        if (!propertyName) {
+            console.warn(`指标 "${indicatorName}" 在系统中未找到对应的属性名`);
+            return;
+        }
+        
+        // 为每个专家处理这个指标的评分
+        expertIdentifiers.forEach(expertId => {
+            const expertColumn = `expert_${expertId}`;
+            const score = parseFloat(row[expertColumn]);
+            
+            if (isNaN(score)) {
+                console.warn(`项目 "${projectName}" 指标 "${indicatorName}" 专家 "${expertId}" 评分无效:`, row[expertColumn]);
+                return;
+            }
+            
+            const projectExpertKey = `${projectName}_${expertId}`;
+            
+            // 初始化项目-专家组合
+            if (!projectExpertData[projectExpertKey]) {
+                projectExpertData[projectExpertKey] = {
+                    name: projectName,
+                    group: groupName,
+                    expert: expertId,
+                    indicators: {}
+                };
+                
+                // 初始化所有指标为0
+                ipEvaluationService.getAllProperties().forEach(property => {
+                    projectExpertData[projectExpertKey].indicators[property] = 0;
+                });
+            }
+            
+            // 设置当前指标的评分
+            projectExpertData[projectExpertKey].indicators[propertyName] = score;
+        });
+    });
+    
+    // 转换为IP数组
+    const ips = Object.values(projectExpertData);
+    
+    console.log(`总共创建了 ${ips.length} 个IP记录`);
+    console.log('前3个IP记录:', ips.slice(0, 3).map(ip => ({ name: ip.name, expert: ip.expert, group: ip.group })));
+    
+    // 按项目统计专家数量
+    const projectStats = {};
+    ips.forEach(ip => {
+        if (!projectStats[ip.name]) {
+            projectStats[ip.name] = 0;
+        }
+        projectStats[ip.name]++;
+    });
+    console.log('各项目专家数量统计:', projectStats);
+    
+    return {
+        ips,
+        groupName,
+        expertCount: expertIdentifiers.length,
+        indicatorCount: new Set(excelData.map(row => row.index)).size,
+        projectCount: new Set(ips.map(ip => ip.name)).size
+    };
+}
+
+// 解析新的项目基础数据结构
+function parseProjectBasedData(excelData) {
+    console.log('检测到新的项目基础数据结构');
+    
+    const firstRow = excelData[0];
+    
+    // 查找所有专家评分列 (expert_指标A, expert_指标B, ...)
+    const expertColumns = [];
+    Object.keys(firstRow).forEach(key => {
+        if (key.startsWith('expert_')) {
+            expertColumns.push(key);
+        }
+    });
+    
+    console.log('发现专家评分列:', expertColumns);
+    
+    if (expertColumns.length === 0) {
+        throw new Error('未找到专家评分列，列名应以"expert_"开头');
+    }
+    
+    // 从列名提取专家标识（去掉expert_前缀）
+    const expertIdentifiers = expertColumns.map(col => col.replace('expert_', ''));
+    console.log('专家标识:', expertIdentifiers);
+    
+    // 获取系统指标结构
+    const allSystemIndicators = ipEvaluationService.getAllThirdIndicators();
+    const indicatorPropertyMap = ipEvaluationService.getIndicatorPropertyMap();
+    console.log('系统指标总数:', allSystemIndicators.length);
+    
+    // 分析数据结构：检查是否每行包含一个项目的所有指标评分
+    // 假设：
+    // 1. 如果expert列较少（比如≤12个），可能是不同专家对同一项目的评分
+    // 2. 如果expert列较多（比如>12个），可能是一个专家对多个指标的评分
+    
+    const ips = [];
+    let groupName = '';
+    
+    // 分析第一行数据来确定结构
+    const sampleRow = excelData[0];
+    console.log('分析数据结构，专家列数量:', expertColumns.length);
+    console.log('示例数据:', expertColumns.slice(0, 3).map(col => `${col}: ${sampleRow[col]}`));
+    
+    if (expertColumns.length <= 15) {
+        // 情况1：每个expert_列代表一个专家对该项目的综合评分
+        console.log('判断为：每列代表一个专家的评分');
+        
+        excelData.forEach((row, rowIndex) => {
+            const projectName = row.project_name;
+            
+            // 获取组别信息
+            if (row.group_name) {
+                groupName = String(row.group_name).trim();
+            } else if (row.county || row.city || row.province) {
+                const locationParts = [row.province, row.city, row.county].filter(Boolean);
+                groupName = locationParts.join('_');
+            } else {
+                groupName = '默认组别';
+            }
+            
+            if (!projectName) {
+                console.warn(`第${rowIndex + 1}行缺少项目名称，跳过`);
+                return;
+            }
+            
+            console.log(`处理项目: ${projectName}, 组别: ${groupName}`);
+            
+            // 为每个专家创建一个IP记录
+            expertIdentifiers.forEach((expertId, expertIndex) => {
+                const expertColumn = `expert_${expertId}`;
+                const score = parseFloat(row[expertColumn]);
+                
+                if (isNaN(score)) {
+                    console.warn(`项目 "${projectName}" 的专家 "${expertId}" 评分无效:`, row[expertColumn]);
+                    return;
+                }
+                
+                // 创建专家IP记录，假设这是一个综合评分，我们将其分配到第一个指标
+                const expertIP = {
+                    name: projectName,
+                    group: groupName,
+                    expert: `专家${expertId}`,
+                    indicators: {}
+                };
+                
+                // 初始化所有指标为0
+                ipEvaluationService.getAllProperties().forEach(property => {
+                    expertIP.indicators[property] = 0;
+                });
+                
+                // 将评分设置到第一个指标（作为综合评分的代表）
+                const firstProperty = ipEvaluationService.getAllProperties()[0];
+                if (firstProperty) {
+                    expertIP.indicators[firstProperty] = score;
+                }
+                
+                ips.push(expertIP);
+            });
+        });
+    } else {
+        // 情况2：每个expert_列代表一个指标的评分
+        console.log('判断为：每列代表一个指标的评分');
+        
+        excelData.forEach((row, rowIndex) => {
+            const projectName = row.project_name;
+            
+            // 获取组别信息
+            if (row.group_name) {
+                groupName = String(row.group_name).trim();
+            } else if (row.county || row.city || row.province) {
+                const locationParts = [row.province, row.city, row.county].filter(Boolean);
+                groupName = locationParts.join('_');
+            } else {
+                groupName = '默认组别';
+            }
+            
+            if (!projectName) {
+                console.warn(`第${rowIndex + 1}行缺少项目名称，跳过`);
+                return;
+            }
+            
+            console.log(`处理项目: ${projectName}, 组别: ${groupName}`);
+            
+            // 创建一个专家评分记录
+            const expertIP = {
+                name: projectName,
+                group: groupName,
+                expert: "综合专家",
+                indicators: {}
+            };
+            
+            // 初始化所有指标为0
+            ipEvaluationService.getAllProperties().forEach(property => {
+                expertIP.indicators[property] = 0;
+            });
+            
+            // 设置每个指标的评分
+            expertIdentifiers.forEach(indicatorId => {
+                const expertColumn = `expert_${indicatorId}`;
+                const score = parseFloat(row[expertColumn]);
+                
+                if (!isNaN(score)) {
+                    // 将指标标识转换为系统属性名
+                    const propertyName = indicatorPropertyMap[indicatorId];
+                    if (propertyName) {
+                        expertIP.indicators[propertyName] = score;
+                    } else {
+                        console.warn(`指标 "${indicatorId}" 在系统中未找到对应的属性名`);
+                    }
+                } else {
+                    console.warn(`项目 "${projectName}" 在指标 "${indicatorId}" 上的评分无效:`, row[expertColumn]);
+                }
+            });
+            
+            ips.push(expertIP);
+        });
+    }
+    
+    console.log(`总共创建了 ${ips.length} 个IP记录`);
+    
+    // 按项目统计专家数量
+    const projectStats = {};
+    ips.forEach(ip => {
+        if (!projectStats[ip.name]) {
+            projectStats[ip.name] = 0;
+        }
+        projectStats[ip.name]++;
+    });
+    console.log('各项目专家数量统计:', projectStats);
+    
+    return {
+        ips,
+        groupName,
+        expertCount: expertColumns.length <= 15 ? expertColumns.length : 1,
+        indicatorCount: expertColumns.length > 15 ? expertColumns.length : 1,
+        projectCount: new Set(ips.map(ip => ip.name)).size
+    };
+}
+
+// 解析旧的指标基础数据结构（保持向后兼容）
+function parseIndicatorBasedData(excelData) {
+    console.log('检测到旧的指标基础数据结构');
+    
     // 获取所有指标名称 (index列)
     const indicators = [];
     const expertColumns = [];
@@ -606,6 +1076,7 @@ function parseExpertScoreData(excelData) {
         ips.push({
             name: ipName,
             group: groupName,
+            expert: expertName,
             indicators: expertScores
         });
     });
@@ -654,9 +1125,10 @@ async function importExpertScoreData(parsedData, userId) {
         addedIPs,
         errors,
         summary: {
-            groupName: parsedData.groupName,
             expertCount: parsedData.expertCount,
-            indicatorCount: parsedData.indicatorCount
+            indicatorCount: parsedData.indicatorCount,
+            projectCount: parsedData.projectCount,
+            groupCount: parsedData.groupCount
         }
     };
 }

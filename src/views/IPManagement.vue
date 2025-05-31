@@ -93,15 +93,18 @@
                 @click="openExpertPanel(ip)"
               >
                 <div class="ip-header">
-                  <div class="ip-name">{{ ip.name }}</div>
+                  <div class="ip-name">{{ ip.project_name }}</div>
                   <div class="ip-actions">
                     <button @click.stop="deleteIP(ip)" class="btn-small btn-delete">删除</button>
                   </div>
                 </div>
                 <div class="ip-details">
-                  <div class="ip-group">组别: {{ ip.group }}</div>
+                  <div class="ip-group">组别: {{ ip.group_name }}</div>
                   <div class="ip-expert">专家: {{ ip.expert }}</div>
-                  <div class="ip-indicators">指标数: {{ getIndicatorCount(ip.indicators) }}</div>
+                  <div class="ip-stats" v-if="ip.expertCount">
+                    <el-icon><User /></el-icon>
+                    <span>{{ ip.expertCount }}位专家</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -125,11 +128,11 @@
             <div class="form-row">
               <div class="form-group">
                 <label>IP名称:</label>
-                <input v-model="ipForm.name" type="text" placeholder="请输入IP名称" />
+                <input v-model="ipForm.project_name" type="text" placeholder="请输入IP名称" />
               </div>
               <div class="form-group">
                 <label>组别:</label>
-                <input v-model="ipForm.group" type="text" placeholder="请输入组别" />
+                <input v-model="ipForm.group_name" type="text" placeholder="请输入组别" />
               </div>
               <div class="form-group">
                 <label>专家:</label>
@@ -172,7 +175,7 @@
           </div>
           
           <div class="expert-info" v-if="selectedIPForExperts">
-            <h4>{{ selectedIPForExperts.name }} ({{ selectedIPForExperts.group }})</h4>
+            <h4>{{ selectedIPForExperts.project_name }} ({{ selectedIPForExperts.group_name }})</h4>
             <p>共有 {{ expertScores.length }} 位专家评分</p>
           </div>
 
@@ -287,13 +290,13 @@ const showExpertPanel = ref(false); // 多专家评分面板
 
 // 表单数据
 const ipForm = reactive({
-  name: '',
-  group: '',
+  project_name: '',
+  group_name: '',
   expert: ''
 });
 
 // 多专家评分相关状态
-const selectedIPForExperts = ref<{ name: string; group: string } | null>(null);
+const selectedIPForExperts = ref<{ project_name: string; group_name: string } | null>(null);
 const expertScores = ref<IP[]>([]);
 const averageScores = ref<Record<string, number>>({});
 
@@ -306,8 +309,8 @@ const currentMode = computed(() => {
   // 检查是否真正的编辑操作：只有当前表单数据与原始IP完全一致时才是编辑
   if (editMode.value && editingIPId.value && selectedIP.value) {
     const isRealEdit = (
-      ipForm.name.trim() === selectedIP.value.name &&
-      ipForm.group.trim() === selectedIP.value.group &&
+      ipForm.project_name.trim() === selectedIP.value.project_name &&
+      ipForm.group_name.trim() === selectedIP.value.group_name &&
       ipForm.expert.trim() === selectedIP.value.expert
     );
     
@@ -418,7 +421,7 @@ const loadStatistics = async () => {
 };
 
 const saveIP = async () => {
-  if (!ipForm.name.trim() || !ipForm.group.trim() || !ipForm.expert.trim()) {
+  if (!ipForm.project_name.trim() || !ipForm.group_name.trim() || !ipForm.expert.trim()) {
     toast.warning('请填写IP名称、组别和专家姓名');
     return;
   }
@@ -441,8 +444,8 @@ const saveIP = async () => {
     });
     
     const ipData = {
-      name: ipForm.name.trim(),
-      group: ipForm.group.trim(),
+      project_name: ipForm.project_name.trim(),
+      group_name: ipForm.group_name.trim(),
       expert: ipForm.expert.trim(),
       indicators
     };
@@ -454,14 +457,14 @@ const saveIP = async () => {
       // 真正的编辑模式：更新现有IP
       loadingText.value = '更新IP中...';
       await ipApi.updateIP(editingIPId.value!, ipData);
-      addLog(`已更新IP: ${ipData.name} (组别: ${ipData.group}, 专家: ${ipData.expert})`);
-      toast.success(`IP "${ipData.name}" 更新成功！`);
+      addLog(`已更新IP: ${ipData.project_name} (组别: ${ipData.group_name}, 专家: ${ipData.expert})`);
+      toast.success(`IP "${ipData.project_name}" 更新成功！`);
     } else {
       // 创建模式：添加新IP
       loadingText.value = '保存IP中...';
       await ipApi.addIP(ipData);
-      addLog(`已添加IP: ${ipData.name} (组别: ${ipData.group}, 专家: ${ipData.expert})`);
-      toast.success(`IP "${ipData.name}" 保存成功！`);
+      addLog(`已添加IP: ${ipData.project_name} (组别: ${ipData.group_name}, 专家: ${ipData.expert})`);
+      toast.success(`IP "${ipData.project_name}" 保存成功！`);
     }
     
     clearForm();
@@ -485,8 +488,8 @@ const selectIP = (ip: IP) => {
   editingIPId.value = ip.id;
   
   // 更新表单和指标值
-  ipForm.name = ip.name;
-  ipForm.group = ip.group;
+  ipForm.project_name = ip.project_name;
+  ipForm.group_name = ip.group_name;
   ipForm.expert = ip.expert;
   
   // 清空现有的指标值
@@ -510,7 +513,7 @@ const selectIP = (ip: IP) => {
     });
   }
   
-  addLog(`选择IP: ${ip.name} (专家: ${ip.expert})`);
+  addLog(`选择IP: ${ip.project_name} (专家: ${ip.expert})`);
 };
 
 // 辅助函数：将中文指标名转换为属性名
@@ -525,14 +528,14 @@ const getPropertyNameForIndicator = (indicator: string): string | null => {
 };
 
 const deleteIP = async (ip: IP) => {
-  if (!confirm(`确定要删除IP "${ip.name}" 吗？`)) return;
+  if (!confirm(`确定要删除IP "${ip.project_name}" 吗？`)) return;
   
   try {
     loading.value = true;
     loadingText.value = '删除IP中...';
     
     await ipApi.deleteIP(ip.id);
-    addLog(`已删除IP: ${ip.name}`);
+    addLog(`已删除IP: ${ip.project_name}`);
     
     // 如果删除的是当前选中的IP，清空选择
     if (selectedIP.value?.id === ip.id) {
@@ -544,7 +547,7 @@ const deleteIP = async (ip: IP) => {
     await loadGroups();
     await loadStatistics();
     
-    toast.success(`IP "${ip.name}" 删除成功`);
+    toast.success(`IP "${ip.project_name}" 删除成功`);
   } catch (error) {
     console.error('删除IP失败:', error);
     toast.fail('删除IP失败');
@@ -555,8 +558,8 @@ const deleteIP = async (ip: IP) => {
 };
 
 const clearForm = () => {
-  ipForm.name = '';
-  ipForm.group = '';
+  ipForm.project_name = '';
+  ipForm.group_name = '';
   ipForm.expert = '';
   editMode.value = false;
   editingIPId.value = null;
@@ -569,8 +572,8 @@ const fillRandomData = () => {
   const projectName = ['赛马', '赛骆驼', '足球', '篮球', '乒乓球', '街舞'];
   const experts = ['张教授', '李专家', '王研究员', '陈博士', '刘教授'];
   
-  ipForm.name = projectName[Math.floor(Math.random() * projectName.length)];
-  ipForm.group = `测试组_${Math.floor(Math.random() * 5) + 1}`;
+  ipForm.project_name = projectName[Math.floor(Math.random() * projectName.length)];
+  ipForm.group_name = `测试组_${Math.floor(Math.random() * 5) + 1}`;
   ipForm.expert = experts[Math.floor(Math.random() * experts.length)];
   
   filteredThirdIndicators.value.forEach(indicator => {
@@ -769,11 +772,11 @@ const openExpertPanel = async (ip: IP) => {
   if (ip._isGroup) {
     // 这是聚合记录，获取所有专家评分
     selectedIP.value = ip; // 设置选中状态，用于左侧高亮显示
-    selectedIPForExperts.value = { name: ip.name, group: ip.group };
+    selectedIPForExperts.value = { project_name: ip.project_name, group_name: ip.group_name };
     await loadExpertScores();
     showExpertPanel.value = true;
     showDataEntryPanel.value = false;
-    addLog(`打开多专家评分管理: ${ip.name} (${ip.group})`);
+    addLog(`打开多专家评分管理: ${ip.project_name} (${ip.group_name})`);
   } else {
     // 单一专家记录，直接编辑
     selectIP(ip);
@@ -789,8 +792,8 @@ const loadExpertScores = async () => {
   try {
     loading.value = true;
     const response = await ipApi.getExpertScoresByIP(
-      selectedIPForExperts.value.name, 
-      selectedIPForExperts.value.group
+      selectedIPForExperts.value.project_name, 
+      selectedIPForExperts.value.group_name
     );
     if (response.data) {
       expertScores.value = response.data;
@@ -833,8 +836,8 @@ const editExpertScore = (expert: IP) => {
   editingIPId.value = expert.id;
   
   // 填充表单
-  ipForm.name = expert.name;
-  ipForm.group = expert.group;
+  ipForm.project_name = expert.project_name;
+  ipForm.group_name = expert.group_name;
   ipForm.expert = expert.expert;
   
   // 填充指标值
@@ -850,7 +853,7 @@ const editExpertScore = (expert: IP) => {
   showExpertPanel.value = false;
   showDataEntryPanel.value = true;
   
-  addLog(`编辑专家评分: ${expert.expert} - ${expert.name}`);
+  addLog(`编辑专家评分: ${expert.expert} - ${expert.project_name}`);
 };
 
 const deleteExpertScore = async (expert: IP) => {
@@ -859,7 +862,7 @@ const deleteExpertScore = async (expert: IP) => {
   try {
     loading.value = true;
     await ipApi.deleteIP(expert.id);
-    addLog(`已删除专家评分: ${expert.expert} - ${expert.name}`);
+    addLog(`已删除专家评分: ${expert.expert} - ${expert.project_name}`);
     toast.success('专家评分删除成功');
     
     // 重新加载专家评分
@@ -1412,7 +1415,7 @@ const getExpertIndicatorScore = (expert: IP, indicator: string): string => {
   color: #6c757d;
 }
 
-.ip-group, .ip-expert, .ip-indicators {
+.ip-group, .ip-expert, .ip-stats {
   font-weight: 500;
 }
 

@@ -27,9 +27,16 @@ class IPModel {
                 console.log('旧索引不存在，跳过删除');
             }
             
-            // 创建新的复合唯一索引：name + group + expert + userId
-            await this.ipsCollection.createIndex({ name: 1, group: 1, expert: 1, userId: 1 }, { unique: true });
-            await this.ipsCollection.createIndex({ group: 1 });
+            try {
+                await this.ipsCollection.dropIndex('name_1_group_1_expert_1_userId_1');
+            } catch (error) {
+                // 索引不存在时忽略错误
+                console.log('旧复合索引不存在，跳过删除');
+            }
+            
+            // 创建新的复合唯一索引：project_name + group_name + expert + userId
+            await this.ipsCollection.createIndex({ project_name: 1, group_name: 1, expert: 1, userId: 1 }, { unique: true });
+            await this.ipsCollection.createIndex({ group_name: 1 });
             await this.ipsCollection.createIndex({ userId: 1 });
             await this.historyCollection.createIndex({ timestamp: -1 });
             
@@ -57,12 +64,12 @@ class IPModel {
             throw new Error('IP数据必须是对象');
         }
 
-        if (!ip.name || typeof ip.name !== 'string') {
-            throw new Error('IP名称必须是非空字符串');
+        if (!ip.project_name || typeof ip.project_name !== 'string') {
+            throw new Error('项目名称必须是非空字符串');
         }
 
-        if (!ip.group || typeof ip.group !== 'string') {
-            throw new Error('IP组别必须是非空字符串');
+        if (!ip.group_name || typeof ip.group_name !== 'string') {
+            throw new Error('组别名称必须是非空字符串');
         }
 
         if (!ip.expert || typeof ip.expert !== 'string') {
@@ -133,20 +140,20 @@ class IPModel {
         
         // 检查是否存在相同name+group+expert+userId的记录
         const existingExactMatch = await this.ipsCollection.findOne({ 
-            name: ip.name, 
-            group: ip.group,
+            project_name: ip.project_name, 
+            group_name: ip.group_name,
             expert: ip.expert,
             userId: userId
         });
         if (existingExactMatch) {
-            throw new Error(`专家 "${ip.expert}" 对IP "${ip.name}" 在组别 "${ip.group}" 中的评分已存在`);
+            throw new Error(`专家 "${ip.expert}" 对IP "${ip.project_name}" 在组别 "${ip.group_name}" 中的评分已存在`);
         }
 
         // 保存专家数据
         const newExpertIP = {
             id: this.generateUniqueId(),
-            name: ip.name,
-            group: ip.group,
+            project_name: ip.project_name,
+            group_name: ip.group_name,
             expert: ip.expert,
             indicators: this.normalizeIndicators(ip.indicators),
             userId: userId,
@@ -220,7 +227,7 @@ class IPModel {
         // 按name+group分组
         const groupedIPs = {};
         allIPs.forEach(ip => {
-            const key = `${ip.name}_${ip.group}`;
+            const key = `${ip.project_name}_${ip.group_name}`;
             if (!groupedIPs[key]) {
                 groupedIPs[key] = [];
             }
@@ -238,7 +245,7 @@ class IPModel {
                 const firstIP = ips[0];
                 resultIPs.push({ 
                     ...firstIP,
-                    id: `group_${firstIP.name}_${firstIP.group}`, // 特殊ID标识聚合记录
+                    id: `group_${firstIP.project_name}_${firstIP.group_name}`, // 特殊ID标识聚合记录
                     expert: `${ips.length}位专家评分`,
                     expertCount: ips.length,
                     _isGroup: true, // 标识这是聚合记录
@@ -261,12 +268,12 @@ class IPModel {
         }
         
         await this.ensureDB();
-        const ips = await this.ipsCollection.find({ group, userId }).toArray();
+        const ips = await this.ipsCollection.find({ group_name: group, userId }).toArray();
         
         // 按name分组（group已经过滤）
         const groupedIPs = {};
         ips.forEach(ip => {
-            const key = ip.name;
+            const key = ip.project_name;
             if (!groupedIPs[key]) {
                 groupedIPs[key] = [];
             }
@@ -284,7 +291,7 @@ class IPModel {
                 const firstIP = ips[0];
                 resultIPs.push({ 
                     ...firstIP,
-                    id: `group_${firstIP.name}_${firstIP.group}`, // 特殊ID标识聚合记录
+                    id: `group_${firstIP.project_name}_${firstIP.group_name}`, // 特殊ID标识聚合记录
                     expert: `${ips.length}位专家评分`,
                     expertCount: ips.length,
                     _isGroup: true, // 标识这是聚合记录
@@ -304,7 +311,7 @@ class IPModel {
             throw new Error('用户ID不能为空');
         }
         
-        const groups = await this.ipsCollection.distinct('group', { userId });
+        const groups = await this.ipsCollection.distinct('group_name', { userId });
         return ['全部', ...groups.sort()];
     }
 
@@ -328,12 +335,12 @@ class IPModel {
             throw new Error('用户ID不能为空');
         }
         
-        const ip = await this.ipsCollection.findOne({ name, userId });
+        const ip = await this.ipsCollection.findOne({ project_name: name, userId });
         return ip ? { ...ip, _id: undefined } : null;
     }
 
     // 根据IP名称和组别获取所有专家评分（仅当前用户）
-    async getExpertScoresByIP(name, group, userId) {
+    async getExpertScoresByIP(project_name, group_name, userId) {
         await this.ensureDB();
         
         if (!userId) {
@@ -341,8 +348,8 @@ class IPModel {
         }
         
         const expertScores = await this.ipsCollection.find({ 
-            name, 
-            group, 
+            project_name, 
+            group_name, 
             userId 
         }).toArray();
         
@@ -519,12 +526,12 @@ class IPModel {
         }
         
         const totalIPs = await this.ipsCollection.countDocuments({ userId });
-        const groups = await this.ipsCollection.distinct('group', { userId });
+        const groups = await this.ipsCollection.distinct('group_name', { userId });
         
         const groupStats = [];
         for (const group of groups) {
-            const count = await this.ipsCollection.countDocuments({ group, userId });
-            groupStats.push({ group, count });
+            const count = await this.ipsCollection.countDocuments({ group_name: group, userId });
+            groupStats.push({ group: group, count });
         }
 
         const totalEvaluations = await this.historyCollection.countDocuments({ userId });
