@@ -53,13 +53,6 @@
               <span class="stat-value">{{ statistics.totalGroups }}</span>
             </div>
           </div>
-          <div class="stat-item">
-            <div class="stat-icon">📈</div>
-            <div class="stat-content">
-              <span class="stat-label">数据操作</span>
-              <span class="stat-value">{{ logs.length }}</span>
-            </div>
-          </div>
         </div>
         <div class="stats-actions">
           <div class="quick-stats">
@@ -1593,23 +1586,101 @@ const getExpertIndicatorScore = (expert: IP, indicator: string): string => {
 }
 
 .loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #007bff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 80px;
+  height: 50px;
+}
+
+.loading-spinner::before {
+  content: '';
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    /* 第1条 - 蓝色 */
+    linear-gradient(to bottom, #007AFF, #0056B3),
+    /* 第2条 - 蓝紫色 */
+    linear-gradient(to bottom, #5856D6, #4A47B8),
+    /* 第3条 - 紫色 */
+    linear-gradient(to bottom, #AF52DE, #9A44C4),
+    /* 第4条 - 粉紫色 */
+    linear-gradient(to bottom, #FF2D92, #E6266F),
+    /* 第5条 - 橙色 */
+    linear-gradient(to bottom, #FF9500, #E6850F),
+    /* 第6条 - 黄色 */
+    linear-gradient(to bottom, #FFCC02, #E6B800),
+    /* 第7条 - 绿色 */
+    linear-gradient(to bottom, #34C759, #2FB04A),
+    /* 第8条 - 青色 */
+    linear-gradient(to bottom, #32D74B, #2DB842);
+  background-size: 
+    8px 100%, 8px 100%, 8px 100%, 8px 100%, 
+    8px 100%, 8px 100%, 8px 100%, 8px 100%;
+  background-position: 
+    0% center, 12px center, 24px center, 36px center,
+    48px center, 60px center, 72px center, 84px center;
+  background-repeat: no-repeat;
+  border-radius: 4px;
+  animation: siri-wave-bars 1.4s ease-in-out infinite;
 }
 
 .loading-text {
   color: white;
-  margin-top: 10px;
+  margin-top: 20px;
   font-size: 16px;
+  font-weight: 500;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+@keyframes siri-wave-bars {
+  0% {
+    background-size: 
+      8px 20%, 8px 40%, 8px 60%, 8px 80%, 
+      8px 100%, 8px 80%, 8px 60%, 8px 40%;
+  }
+  12.5% {
+    background-size: 
+      8px 40%, 8px 60%, 8px 80%, 8px 100%, 
+      8px 80%, 8px 60%, 8px 40%, 8px 20%;
+  }
+  25% {
+    background-size: 
+      8px 60%, 8px 80%, 8px 100%, 8px 80%, 
+      8px 60%, 8px 40%, 8px 20%, 8px 40%;
+  }
+  37.5% {
+    background-size: 
+      8px 80%, 8px 100%, 8px 80%, 8px 60%, 
+      8px 40%, 8px 20%, 8px 40%, 8px 60%;
+  }
+  50% {
+    background-size: 
+      8px 100%, 8px 80%, 8px 60%, 8px 40%, 
+      8px 20%, 8px 40%, 8px 60%, 8px 80%;
+  }
+  62.5% {
+    background-size: 
+      8px 80%, 8px 60%, 8px 40%, 8px 20%, 
+      8px 40%, 8px 60%, 8px 80%, 8px 100%;
+  }
+  75% {
+    background-size: 
+      8px 60%, 8px 40%, 8px 20%, 8px 40%, 
+      8px 60%, 8px 80%, 8px 100%, 8px 80%;
+  }
+  87.5% {
+    background-size: 
+      8px 40%, 8px 20%, 8px 40%, 8px 60%, 
+      8px 80%, 8px 100%, 8px 80%, 8px 60%;
+  }
+  100% {
+    background-size: 
+      8px 20%, 8px 40%, 8px 60%, 8px 80%, 
+      8px 100%, 8px 80%, 8px 60%, 8px 40%;
+  }
 }
 
 /* 表单相关样式 */

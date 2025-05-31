@@ -641,6 +641,7 @@ function parseExpertProjectData(excelData) {
     
     return {
         ips,
+        groupName: Array.from(groupSet)[0] || '未知组别',
         expertCount: expertSet.size,
         indicatorCount: validIndicatorColumns.length,
         projectCount: projectSet.size,
@@ -1125,6 +1126,7 @@ async function importExpertScoreData(parsedData, userId) {
         addedIPs,
         errors,
         summary: {
+            groupName: parsedData.groupName,
             expertCount: parsedData.expertCount,
             indicatorCount: parsedData.indicatorCount,
             projectCount: parsedData.projectCount,
