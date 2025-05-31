@@ -159,7 +159,7 @@ class IPEvaluationService {
                     const propertyName = this.indicatorPropertyMap[indicator];
                     if (!propertyName || !(propertyName in indicatorObject)) {
                         throw new Error(`未找到指标: ${indicator}`);
-                    }
+            }
                     return indicatorObject[propertyName];
                 });
             } else {

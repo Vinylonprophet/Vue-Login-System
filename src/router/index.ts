@@ -45,13 +45,13 @@ const router = createRouter({
 router.beforeEach(async (to, _from, next) => {
   // 不需要登录验证的页面
   const publicRoutes = ['/login', '/register']
-  
+
   // 如果是公开页面，直接通过
   if (publicRoutes.includes(to.path)) {
     next()
     return
   }
-  
+
   try {
     // 检查登录状态
     const response = await fetch('http://localhost:3001/v1/auth/status', {
@@ -71,7 +71,7 @@ router.beforeEach(async (to, _from, next) => {
   } catch (error) {
     console.error('检查登录状态失败:', error)
     // 网络错误或其他问题，重定向到登录页
-    next('/login')
+      next('/login')
   }
 })
 

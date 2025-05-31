@@ -30,6 +30,13 @@
             </svg>
             <span>导出Excel</span>
           </button>
+          <button @click="toggleAIAnalysis" class="header-btn ai-btn" :disabled="!hasAnalysisResults">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <span>AI分析</span>
+          </button>
           </div>
           </div>
       
@@ -310,6 +317,130 @@
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
       <div class="loading-text">{{ loadingText }}</div>
+    </div>
+
+    <!-- AI分析聊天窗口 -->
+    <div v-if="showAIDialog" class="ai-chat-window" :class="{ 'ai-minimized': isAIMinimized }">
+      <div class="ai-chat-header" @mousedown="startDrag">
+        <div class="ai-chat-title">
+          <span class="ai-icon">🤖</span>
+          <h3>AI智能分析助手</h3>
+          <span class="ai-status" :class="{ 'ai-thinking': aiAnalysisLoading }">
+            {{ aiAnalysisLoading ? '思考中...' : '在线' }}
+          </span>
+        </div>
+        <div class="ai-chat-controls">
+          <button @click="toggleAIMinimize" class="ai-control-btn" title="最小化">
+            {{ isAIMinimized ? '📈' : '➖' }}
+          </button>
+          <button @click="closeAIDialog" class="ai-control-btn" title="关闭">✕</button>
+        </div>
+      </div>
+      
+      <div v-show="!isAIMinimized" class="ai-chat-body">
+        <!-- 快捷分析按钮 -->
+        <div class="ai-quick-actions">
+          <div class="ai-quick-title">快速分析图表:</div>
+          <div class="ai-quick-buttons">
+            <button @click="analyzeSpecificChart('fitness')" 
+                    :disabled="chartTabs.find(t => t.id === 'fitness')?.disabled"
+                    class="ai-quick-btn" title="适应度变化分析">
+              📈 适应度 <kbd>1</kbd>
+            </button>
+            <button @click="analyzeSpecificChart('scores')" 
+                    :disabled="chartTabs.find(t => t.id === 'scores')?.disabled"
+                    class="ai-quick-btn" title="IP评分分布分析">
+              📊 评分 <kbd>2</kbd>
+            </button>
+            <button @click="analyzeSpecificChart('radar')" 
+                    :disabled="chartTabs.find(t => t.id === 'radar')?.disabled"
+                    class="ai-quick-btn" title="指标权重雷达图分析">
+              🎯 权重 <kbd>3</kbd>
+            </button>
+            <button @click="analyzeSpecificChart('neural')" 
+                    :disabled="chartTabs.find(t => t.id === 'neural')?.disabled"
+                    class="ai-quick-btn" title="神经网络训练分析">
+              🧠 神经网络 <kbd>4</kbd>
+            </button>
+            <button @click="analyzeSpecificChart('importance')" 
+                    :disabled="chartTabs.find(t => t.id === 'importance')?.disabled"
+                    class="ai-quick-btn" title="特征重要性分析">
+              ⚖️ 特征重要性 <kbd>5</kbd>
+            </button>
+            <button @click="analyzeSpecificChart('shap')" 
+                    :disabled="chartTabs.find(t => t.id === 'shap')?.disabled"
+                    class="ai-quick-btn" title="SHAP模型解释分析">
+              🔍 SHAP <kbd>6</kbd>
+            </button>
+            <button @click="analyzeSpecificChart('pca')" 
+                    :disabled="chartTabs.find(t => t.id === 'pca')?.disabled"
+                    class="ai-quick-btn" title="PCA降维分析">
+              🔀 PCA <kbd>7</kbd>
+            </button>
+            <button @click="analyzeSpecificChart('cluster')" 
+                    :disabled="chartTabs.find(t => t.id === 'cluster')?.disabled"
+                    class="ai-quick-btn" title="聚类分析">
+              🎭 聚类 <kbd>8</kbd>
+            </button>
+            <button @click="analyzeSpecificChart('all')" 
+                    :disabled="!hasAnalysisResults"
+                    class="ai-quick-btn ai-analyze-all" title="全面综合分析">
+              🔍 全面分析 <kbd>A</kbd>
+            </button>
+          </div>
+        </div>
+        
+        <!-- 聊天消息区域 -->
+        <div class="ai-chat-messages" ref="chatMessages">
+          <div v-for="(message, index) in aiChatHistory" :key="index" class="ai-message" :class="message.type">
+            <div class="ai-message-avatar">
+              {{ message.type === 'user' ? '👤' : '🤖' }}
+            </div>
+            <div class="ai-message-content">
+              <div class="ai-message-text" v-html="formatAIMessage(message.content)"></div>
+              <div class="ai-message-time">{{ formatMessageTime(message.timestamp) }}</div>
+            </div>
+          </div>
+          
+          <div v-if="aiAnalysisLoading" class="ai-message ai-typing">
+            <div class="ai-message-avatar">🤖</div>
+            <div class="ai-message-content">
+              <div class="ai-typing-indicator">
+                <span></span><span></span><span></span>
+              </div>
+              <div class="ai-message-text">正在分析数据...</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 输入区域 -->
+        <div class="ai-chat-input">
+          <div class="ai-input-wrapper">
+            <input 
+              v-model="userInput" 
+              @keydown.enter="sendUserMessage"
+              @keydown.ctrl.49.prevent="analyzeSpecificChart('fitness')"
+              @keydown.ctrl.50.prevent="analyzeSpecificChart('scores')" 
+              @keydown.ctrl.51.prevent="analyzeSpecificChart('radar')"
+              @keydown.ctrl.52.prevent="analyzeSpecificChart('neural')"
+              @keydown.ctrl.53.prevent="analyzeSpecificChart('importance')"
+              @keydown.ctrl.54.prevent="analyzeSpecificChart('shap')"
+              @keydown.ctrl.55.prevent="analyzeSpecificChart('pca')"
+              @keydown.ctrl.56.prevent="analyzeSpecificChart('cluster')"
+              @keydown.ctrl.65.prevent="analyzeSpecificChart('all')"
+              placeholder="输入问题或使用Ctrl+数字键快速分析..." 
+              class="ai-input-field"
+              ref="aiInput"
+            />
+            <button @click="sendUserMessage" :disabled="!userInput.trim() || aiAnalysisLoading" class="ai-send-btn">
+              {{ aiAnalysisLoading ? '⏳' : '📤' }}
+            </button>
+          </div>
+          <div class="ai-input-hint">
+            快捷键: Ctrl+1~8分析对应图表, Ctrl+A全面分析
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -1929,6 +2060,329 @@ const exportToExcel = async () => {
     loadingText.value = '';
   }
 };
+
+// AI分析相关
+const showAIDialog = ref(false);
+const aiAnalysisLoading = ref(false);
+const aiAnalysisResult = ref<any>(null);
+
+const toggleAIAnalysis = () => {
+  showAIDialog.value = true;
+};
+
+const closeAIDialog = () => {
+  showAIDialog.value = false;
+};
+
+const startAIAnalysis = async () => {
+  aiAnalysisLoading.value = true;
+  addLog('🤖 开始AI分析...');
+  
+  try {
+    // 准备分析数据
+    const analysisData = {
+      selectedIPCount: selectedIPs.value.length,
+      indicatorCount: filteredThirdIndicators.value.length,
+      evaluationResult: evaluationResult.value,
+      weights: evaluationResult.value?.weights,
+      neuralNetworkResult: neuralNetworkResult.value,
+      shapResult: shapResult.value,
+      pcaResult: pcaResult.value,
+      advancedClusterResult: advancedClusterResult.value
+    };
+    
+    // 获取当前可用的图表类型
+    const availableCharts = chartTabs.value
+      .filter(tab => !tab.disabled)
+      .map(tab => tab.title);
+    
+    const response = await ipApi.aiAnalysis(analysisData, availableCharts);
+    
+    if (response.success) {
+      aiAnalysisResult.value = response.data;
+      addLog('🎉 AI分析完成');
+    } else {
+      throw new Error(response.message || 'AI分析失败');
+    }
+  } catch (error) {
+    console.error('AI分析失败:', error);
+    addLog(`❌ AI分析失败: ${error}`);
+    toast.fail('AI分析失败，请重试');
+  } finally {
+    aiAnalysisLoading.value = false;
+  }
+};
+
+const formatAIAnalysis = (analysis: string) => {
+  if (!analysis) return '';
+  
+  // 将AI分析结果格式化为HTML
+  return analysis
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // 粗体
+    .replace(/### (.*?)(\n|$)/g, '<h4>$1</h4>') // 三级标题
+    .replace(/## (.*?)(\n|$)/g, '<h3>$1</h3>') // 二级标题
+    .replace(/# (.*?)(\n|$)/g, '<h2>$1</h2>') // 一级标题
+    .replace(/\n\n/g, '</p><p>') // 段落
+    .replace(/^\s*(.*)/g, '<p>$1</p>') // 包装段落
+    .replace(/^\d+\.\s/gm, '<li>') // 有序列表
+    .replace(/<li>/g, '</p><li><p>')
+    .replace(/<\/p><p><\/p>/g, '</p>')
+    .replace(/^<p><\/p>/, '');
+};
+
+const formatAnalysisTime = (timestamp: string) => {
+  if (!timestamp) return '';
+  return new Date(timestamp).toLocaleString('zh-CN');
+};
+
+// AI分析聊天窗口相关
+interface ChatMessage {
+  type: 'user' | 'ai';
+  content: string;
+  timestamp: string;
+}
+
+const isAIMinimized = ref(false);
+const aiChatHistory = ref<ChatMessage[]>([]);
+const userInput = ref('');
+const aiInput = ref<HTMLInputElement>();
+const chatMessages = ref<HTMLElement>();
+
+// 拖拽相关
+const isDragging = ref(false);
+const dragOffset = ref({ x: 0, y: 0 });
+
+const formatAIMessage = (message: string) => {
+  if (!message) return '';
+  
+  // 将AI分析结果格式化为HTML
+  return message
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // 粗体
+    .replace(/### (.*?)(\n|$)/g, '<h4>$1</h4>') // 三级标题
+    .replace(/## (.*?)(\n|$)/g, '<h3>$1</h3>') // 二级标题
+    .replace(/# (.*?)(\n|$)/g, '<h2>$1</h2>') // 一级标题
+    .replace(/\n\n/g, '</p><p>') // 段落
+    .replace(/\n/g, '<br>') // 换行
+    .replace(/^\s*(.*)/g, '<p>$1</p>') // 包装段落
+    .replace(/<\/p><p><\/p>/g, '</p>');
+};
+
+const formatMessageTime = (timestamp: string) => {
+  return new Date(timestamp).toLocaleTimeString('zh-CN', { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+};
+
+const addChatMessage = (type: 'user' | 'ai', content: string) => {
+  aiChatHistory.value.push({
+    type,
+    content,
+    timestamp: new Date().toISOString()
+  });
+  
+  // 滚动到底部
+  nextTick(() => {
+    if (chatMessages.value) {
+      chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
+    }
+  });
+};
+
+const sendUserMessage = async () => {
+  if (!userInput.value.trim() || aiAnalysisLoading.value) return;
+  
+  const message = userInput.value.trim();
+  addChatMessage('user', message);
+  userInput.value = '';
+  
+  // 触发AI分析
+  await performAIAnalysis(message);
+};
+
+const analyzeSpecificChart = async (chartId: string) => {
+  if (aiAnalysisLoading.value) return;
+  
+  let analysisPrompt = '';
+  let chartName = '';
+  
+  switch (chartId) {
+    case 'fitness':
+      chartName = '适应度变化图表';
+      analysisPrompt = '请详细分析适应度变化图表，解释遗传算法的优化过程、收敛趋势、训练效果，以及如何通过适应度曲线判断模型性能。';
+      break;
+    case 'scores':
+      chartName = 'IP评分分布图表';
+      analysisPrompt = '请分析IP评分分布柱状图，识别表现优秀和需要改进的项目，解释评分差异的原因，并提供针对性的改进建议。';
+      break;
+    case 'radar':
+      chartName = '指标权重雷达图';
+      analysisPrompt = '请分析指标权重雷达图，解释各指标的相对重要性，识别关键影响因素，说明权重分布对评估结果的影响。';
+      break;
+    case 'neural':
+      chartName = '神经网络训练图表';
+      analysisPrompt = '请分析神经网络训练过程图表，评估模型的学习能力、收敛速度、泛化性能，并解释损失函数的变化趋势。';
+      break;
+    case 'importance':
+      chartName = '特征重要性图表';
+      analysisPrompt = '请分析特征重要性图表，识别对预测结果最有影响力的特征，解释特征重要性的计算方法和业务意义。';
+      break;
+    case 'shap':
+      chartName = 'SHAP模型解释图表';
+      analysisPrompt = '请分析SHAP图表，解释模型的可解释性分析结果，说明各特征对不同样本预测的贡献度，以及SHAP值的业务含义。';
+      break;
+    case 'pca':
+      chartName = 'PCA降维分析图表';
+      analysisPrompt = '请分析PCA降维图表，解释主成分的含义、方差贡献率、数据的分布模式，以及降维对数据理解的帮助。';
+      break;
+    case 'cluster':
+      chartName = '聚类分析图表';
+      analysisPrompt = '请分析聚类分析图表，解释各聚类的特征、IP项目的分组模式、聚类质量，并提供基于聚类结果的业务洞察。';
+      break;
+    case 'all':
+      chartName = '全面综合分析';
+      analysisPrompt = '请对所有可用图表进行全面分析，提供系统性的数据洞察、综合性的评估结论和战略性的发展建议。';
+      break;
+    default:
+      return;
+  }
+  
+  addChatMessage('user', `分析${chartName}`);
+  await performAIAnalysis(analysisPrompt);
+};
+
+const performAIAnalysis = async (customPrompt?: string) => {
+  aiAnalysisLoading.value = true;
+  addLog('🤖 开始AI分析...');
+  
+  try {
+    // 准备分析数据
+    const analysisData = {
+      selectedIPCount: selectedIPs.value.length,
+      indicatorCount: filteredThirdIndicators.value.length,
+      evaluationResult: evaluationResult.value,
+      weights: evaluationResult.value?.weights,
+      neuralNetworkResult: neuralNetworkResult.value,
+      shapResult: shapResult.value,
+      pcaResult: pcaResult.value,
+      advancedClusterResult: advancedClusterResult.value,
+      customPrompt
+    };
+    
+    // 获取当前可用的图表类型
+    const availableCharts = chartTabs.value
+      .filter(tab => !tab.disabled)
+      .map(tab => tab.title);
+    
+    const response = await ipApi.aiAnalysis(analysisData, availableCharts);
+    
+    if (response.success) {
+      aiAnalysisResult.value = response.data;
+      addChatMessage('ai', response.data?.analysis || '分析完成，但未返回结果');
+      addLog('🎉 AI分析完成');
+    } else {
+      throw new Error(response.message || 'AI分析失败');
+    }
+  } catch (error) {
+    console.error('AI分析失败:', error);
+    addChatMessage('ai', `抱歉，分析失败了：${error}`);
+    addLog(`❌ AI分析失败: ${error}`);
+    toast.fail('AI分析失败，请重试');
+  } finally {
+    aiAnalysisLoading.value = false;
+  }
+};
+
+const startDrag = (event: MouseEvent) => {
+  isDragging.value = true;
+  const rect = (event.target as HTMLElement).closest('.ai-chat-window')?.getBoundingClientRect();
+  if (rect) {
+    dragOffset.value = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+  }
+  
+  document.addEventListener('mousemove', handleDrag);
+  document.addEventListener('mouseup', stopDrag);
+};
+
+const handleDrag = (event: MouseEvent) => {
+  if (!isDragging.value) return;
+  
+  const chatWindow = document.querySelector('.ai-chat-window') as HTMLElement;
+  if (chatWindow) {
+    chatWindow.style.left = `${event.clientX - dragOffset.value.x}px`;
+    chatWindow.style.top = `${event.clientY - dragOffset.value.y}px`;
+    chatWindow.style.right = 'auto';
+    chatWindow.style.bottom = 'auto';
+  }
+};
+
+const stopDrag = () => {
+  isDragging.value = false;
+  document.removeEventListener('mousemove', handleDrag);
+  document.removeEventListener('mouseup', stopDrag);
+};
+
+const toggleAIMinimize = () => {
+  isAIMinimized.value = !isAIMinimized.value;
+};
+
+// 添加全局快捷键监听
+onMounted(() => {
+  const handleGlobalKeydown = (event: KeyboardEvent) => {
+    if (!showAIDialog.value) return;
+    
+    if (event.ctrlKey && !event.shiftKey && !event.altKey) {
+      switch (event.code) {
+        case 'Digit1':
+          event.preventDefault();
+          analyzeSpecificChart('fitness');
+          break;
+        case 'Digit2':
+          event.preventDefault();
+          analyzeSpecificChart('scores');
+          break;
+        case 'Digit3':
+          event.preventDefault();
+          analyzeSpecificChart('radar');
+          break;
+        case 'Digit4':
+          event.preventDefault();
+          analyzeSpecificChart('neural');
+          break;
+        case 'Digit5':
+          event.preventDefault();
+          analyzeSpecificChart('importance');
+          break;
+        case 'Digit6':
+          event.preventDefault();
+          analyzeSpecificChart('shap');
+          break;
+        case 'Digit7':
+          event.preventDefault();
+          analyzeSpecificChart('pca');
+          break;
+        case 'Digit8':
+          event.preventDefault();
+          analyzeSpecificChart('cluster');
+          break;
+        case 'KeyA':
+          event.preventDefault();
+          analyzeSpecificChart('all');
+          break;
+      }
+    }
+  };
+  
+  document.addEventListener('keydown', handleGlobalKeydown);
+  
+  // 组件卸载时移除监听器
+  return () => {
+    document.removeEventListener('keydown', handleGlobalKeydown);
+  };
+});
 </script>
 
 <style scoped>
@@ -2013,6 +2467,19 @@ const exportToExcel = async () => {
 }
 
 .header-btn.excel-btn:disabled {
+  background: linear-gradient(135deg, #d6d6d6 0%, #e9e9e9 100%);
+  color: #999;
+}
+
+.header-btn.ai-btn {
+  background: linear-gradient(135deg, #ff7b72 0%, #ff6b6b 100%);
+}
+
+.header-btn.ai-btn:hover {
+  background: linear-gradient(135deg, #ff5b52 0%, #ff4b4b 100%);
+}
+
+.header-btn.ai-btn:disabled {
   background: linear-gradient(135deg, #d6d6d6 0%, #e9e9e9 100%);
   color: #999;
 }
@@ -2860,4 +3327,646 @@ const exportToExcel = async () => {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
-</style>
+/* AI分析对话框样式 */
+.ai-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+
+.ai-dialog {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 800px;
+  max-height: 80vh;
+  overflow: hidden;
+  animation: ai-dialog-enter 0.3s ease-out;
+}
+
+@keyframes ai-dialog-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.ai-dialog-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #ff7b72 0%, #ff6b6b 100%);
+  color: white;
+}
+
+.ai-dialog-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.ai-dialog-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ai-toggle-btn, .ai-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.ai-toggle-btn:hover, .ai-close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ai-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.ai-close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ai-dialog-content {
+  padding: 24px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.ai-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.ai-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #ff6b6b;
+  border-radius: 50%;
+  animation: ai-spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes ai-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.ai-loading p {
+  color: #6b7280;
+  margin: 0;
+  font-size: 14px;
+}
+
+.ai-analysis-result {
+  animation: ai-content-fade-in 0.5s ease-out;
+}
+
+@keyframes ai-content-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-analysis-text {
+  line-height: 1.6;
+  color: #374151;
+  font-size: 14px;
+}
+
+.ai-analysis-text h2, .ai-analysis-text h3, .ai-analysis-text h4 {
+  color: #1f2937;
+  margin: 20px 0 10px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #f3f4f6;
+}
+
+.ai-analysis-text h2 {
+  font-size: 18px;
+  color: #ff6b6b;
+}
+
+.ai-analysis-text h3 {
+  font-size: 16px;
+  color: #374151;
+}
+
+.ai-analysis-text h4 {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.ai-analysis-text p {
+  margin: 12px 0;
+  text-align: justify;
+}
+
+.ai-analysis-text strong {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.ai-analysis-text li {
+  margin: 8px 0;
+  padding-left: 8px;
+  list-style: none;
+  position: relative;
+}
+
+.ai-analysis-text li::before {
+  content: "•";
+  color: #ff6b6b;
+  font-weight: bold;
+  position: absolute;
+  left: -12px;
+}
+
+.ai-analysis-meta {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  text-align: right;
+}
+
+.ai-analysis-meta small {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.ai-analysis-placeholder {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.ai-analysis-placeholder p {
+  color: #6b7280;
+  margin-bottom: 20px;
+}
+
+.ai-start-btn {
+  background: linear-gradient(135deg, #ff7b72 0%, #ff6b6b 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+
+.ai-start-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff5b52 0%, #ff4b4b 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+}
+
+.ai-start-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .ai-dialog {
+    width: 95%;
+    max-height: 90vh;
+  }
+  
+  .ai-dialog-header {
+    padding: 16px 20px;
+  }
+  
+  .ai-dialog-content {
+    padding: 20px;
+    max-height: 70vh;
+  }
+  
+  .ai-analysis-text {
+    font-size: 13px;
+  }
+}
+
+.ai-chat-window {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 400px;
+  height: 600px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e9ecef;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-minimized {
+  height: 60px;
+}
+
+.ai-chat-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: move;
+  user-select: none;
+  min-height: 60px;
+  box-sizing: border-box;
+}
+
+.ai-chat-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.ai-chat-title h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ai-icon {
+  font-size: 20px;
+  animation: ai-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ai-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.ai-status {
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: 8px;
+}
+
+.ai-status.ai-thinking {
+  background: rgba(255, 193, 7, 0.8);
+  animation: ai-thinking 1.5s ease-in-out infinite;
+}
+
+@keyframes ai-thinking {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+.ai-chat-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-control-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.ai-control-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.ai-chat-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-quick-actions {
+  padding: 16px;
+  border-bottom: 1px solid #f1f3f4;
+  background: #fafbfc;
+}
+
+.ai-quick-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 8px;
+}
+
+.ai-quick-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.ai-quick-btn {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: #495057;
+  line-height: 1.2;
+}
+
+.ai-quick-btn:hover:not(:disabled) {
+  background: #f8f9fa;
+  border-color: #667eea;
+  transform: translateY(-1px);
+}
+
+.ai-quick-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-quick-btn.ai-analyze-all {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+
+.ai-quick-btn.ai-analyze-all:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+}
+
+.ai-quick-btn kbd {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 8px;
+  margin-left: auto;
+}
+
+.ai-chat-messages {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.ai-message {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  animation: ai-message-slide-in 0.3s ease-out;
+}
+
+@keyframes ai-message-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-message.user {
+  flex-direction: row-reverse;
+}
+
+.ai-message-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.ai-message.user .ai-message-avatar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.ai-message.ai .ai-message-avatar {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.ai-message-content {
+  flex: 1;
+  max-width: calc(100% - 44px);
+}
+
+.ai-message.user .ai-message-content {
+  text-align: right;
+}
+
+.ai-message-text {
+  background: white;
+  padding: 8px 12px;
+  border-radius: 12px;
+  line-height: 1.4;
+  word-wrap: break-word;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f1f3f4;
+  font-size: 12px;
+}
+
+.ai-message.user .ai-message-text {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+
+.ai-message.ai .ai-message-text {
+  background: #f8f9fa;
+}
+
+.ai-message-text h2, .ai-message-text h3, .ai-message-text h4 {
+  margin: 6px 0 3px 0;
+  color: inherit;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+}
+
+.ai-message-text p {
+  margin: 6px 0;
+  font-size: 12px;
+}
+
+.ai-message-time {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-top: 3px;
+}
+
+.ai-message.user .ai-message-time {
+  text-align: right;
+}
+
+.ai-typing .ai-message-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-typing-indicator {
+  display: flex;
+  gap: 4px;
+}
+
+.ai-typing-indicator span {
+  width: 6px;
+  height: 6px;
+  background: #9ca3af;
+  border-radius: 50%;
+  animation: ai-typing-bounce 1.4s ease-in-out infinite both;
+}
+
+.ai-typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+.ai-typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes ai-typing-bounce {
+  0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.ai-chat-input {
+  padding: 16px;
+  border-top: 1px solid #f1f3f4;
+  background: white;
+}
+
+.ai-input-wrapper {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ai-input-field {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #e9ecef;
+  border-radius: 20px;
+  font-size: 12px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.ai-input-field:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.ai-send-btn {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.ai-send-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.ai-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ai-input-hint {
+  font-size: 10px;
+  color: #9ca3af;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .ai-chat-window {
+    width: calc(100vw - 40px);
+    height: calc(100vh - 80px);
+    bottom: 10px;
+    right: 10px;
+    left: 10px;
+  }
+  
+  .ai-quick-buttons {
+    grid-template-columns: 1fr;
+  }
+  
+  .ai-quick-btn.ai-analyze-all {
+    grid-column: 1;
+  }
+}
+</style> 

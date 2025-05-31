@@ -442,12 +442,12 @@ router.post('/import-excel', upload.single('file'), async (req, res) => {
             // JSON文件处理
             const jsonData = JSON.parse(req.file.buffer.toString());
             const result = ipModel.importData(jsonData);
-            
+        
             return res.json({
-                success: true,
-                data: result,
-                message: `成功导入${result.ipsCount}个IP和${result.historyCount}条历史记录`
-            });
+            success: true,
+            data: result,
+            message: `成功导入${result.ipsCount}个IP和${result.historyCount}条历史记录`
+        });
         } else if (['.xlsx', '.xls'].includes(fileExtension)) {
             // Excel文件处理
             const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
@@ -1167,6 +1167,237 @@ router.post('/import', async (req, res) => {
         res.status(400).json({
             success: false,
             message: error.message
+        });
+    }
+});
+
+// AI分析接口 - 使用DeepSeek API
+router.post('/ai-analysis', async (req, res) => {
+    try {
+        const { analysisData, chartTypes } = req.body;
+        
+        if (!analysisData || !chartTypes) {
+            return res.status(400).json({
+                success: false,
+                message: '缺少分析数据或图表类型'
+            });
+        }
+        
+        // 构建分析提示词
+        let prompt = '';
+        
+        // 如果有自定义提示词，使用它；否则使用默认分析模板
+        if (analysisData.customPrompt) {
+            // 分析用户问题类型
+            const userQuestion = analysisData.customPrompt.toLowerCase();
+            const isSystemQuestion = userQuestion.includes('模型') || userQuestion.includes('ai') || 
+                                   userQuestion.includes('系统') || userQuestion.includes('版本') ||
+                                   userQuestion.includes('什么ai') || userQuestion.includes('用的什么');
+            const isGeneralQuestion = userQuestion.includes('你好') || userQuestion.includes('帮我') ||
+                                    userQuestion.includes('可以') || userQuestion.includes('怎么');
+            
+            if (isSystemQuestion) {
+                // 系统相关问题，直接回答
+                prompt = `用户询问关于AI系统的问题："${analysisData.customPrompt}"
+
+请简洁明确地回答用户的问题。如果问的是使用什么模型，回答当前使用的是GPT-4o语言模型。
+如果问的是系统功能，简要介绍这是一个少数民族体育IP评估分析系统，具有数据分析和AI对话功能。
+
+回答要简短、直接、友好。`;
+            } else if (isGeneralQuestion && (!analysisData.evaluationResult || analysisData.selectedIPCount === 0)) {
+                // 一般性问题但没有数据
+                prompt = `用户说："${analysisData.customPrompt}"
+
+当前系统状态：
+- 分析的IP数量: ${analysisData.selectedIPCount || 0}
+- 可用数据: ${analysisData.evaluationResult ? '有分析结果' : '暂无分析数据'}
+
+请友好地回应用户。如果用户需要数据分析但当前没有数据，建议用户先进行IP评估分析。
+如果是打招呼或一般性问题，给出友好回应并简单介绍系统功能。`;
+            } else {
+                // 数据分析相关问题
+                prompt = `你是一位专业的数据分析师，擅长分析少数民族民俗体育IP评估数据。
+            
+用户问题：${analysisData.customPrompt}
+
+基于以下数据回答用户的问题：
+
+## 当前分析数据
+- 分析的IP数量: ${analysisData.selectedIPCount || 0}
+- 使用的指标数量: ${analysisData.indicatorCount || 0}
+- 可用图表类型: ${chartTypes.join(', ')}`;
+
+                // 添加具体的分析数据
+                if (analysisData.evaluationResult) {
+                    prompt += `\n\n### IP评分排名:`;
+                    analysisData.evaluationResult.evaluation.slice(0, 5).forEach((item, index) => {
+                        prompt += `\n${index + 1}. ${item.name}: ${item.score.toFixed(3)}分`;
+                    });
+                }
+
+                if (analysisData.weights && analysisData.weights.length > 0) {
+                    prompt += `\n\n### 关键指标权重:`;
+                    analysisData.weights.slice(0, 5).forEach((weight, index) => {
+                        prompt += `\n指标${index + 1}: ${(weight * 100).toFixed(2)}%`;
+                    });
+                }
+
+                if (analysisData.neuralNetworkResult) {
+                    const nnData = analysisData.neuralNetworkResult;
+                    prompt += `\n\n### 神经网络训练结果:
+- 训练轮数: ${nnData.training_losses ? nnData.training_losses.length : 0}
+- 初始损失: ${nnData.training_losses ? nnData.training_losses[0]?.toFixed(4) : 'N/A'}
+- 最终损失: ${nnData.training_losses ? nnData.training_losses[nnData.training_losses.length - 1]?.toFixed(4) : 'N/A'}`;
+                }
+
+                if (analysisData.pcaResult) {
+                    prompt += `\n\n### PCA降维分析:
+- 主成分数量: ${analysisData.pcaResult.n_components}
+- 总方差解释率: ${(analysisData.pcaResult.total_variance_explained * 100).toFixed(1)}%`;
+                }
+
+                prompt += `\n\n请基于以上数据，针对用户的问题给出专业、准确、有针对性的回答。
+如果用户的问题与当前数据无关，请礼貌地说明并引导用户提出相关问题。
+回答要用中文，语言要专业但易懂。`;
+            }
+        } else {
+            // 默认分析模板
+            prompt = `你是一位专业的数据分析师，请分析以下少数民族民俗体育IP评估的分析结果：
+
+## 分析概况
+- 分析的IP数量: ${analysisData.selectedIPCount || 0}
+- 使用的指标数量: ${analysisData.indicatorCount || 0}
+- 生成的图表类型: ${chartTypes.join(', ')}
+
+## 详细数据
+`;
+
+            // 添加具体的分析数据
+            if (analysisData.evaluationResult) {
+                prompt += `\n### IP评分排名:
+`;
+                analysisData.evaluationResult.evaluation.slice(0, 5).forEach((item, index) => {
+                    prompt += `${index + 1}. ${item.name}: ${item.score.toFixed(3)}分\n`;
+                });
+            }
+
+            if (analysisData.weights && analysisData.weights.length > 0) {
+                prompt += `\n### 关键指标权重 (前5项):
+`;
+                analysisData.weights.slice(0, 5).forEach((weight, index) => {
+                    prompt += `指标${index + 1}: ${(weight * 100).toFixed(2)}%\n`;
+                });
+            }
+
+            if (analysisData.neuralNetworkResult) {
+                const nnData = analysisData.neuralNetworkResult;
+                prompt += `\n### 神经网络训练结果:
+- 训练轮数: ${nnData.training_losses ? nnData.training_losses.length : 0}
+- 初始损失: ${nnData.training_losses ? nnData.training_losses[0]?.toFixed(4) : 'N/A'}
+- 最终损失: ${nnData.training_losses ? nnData.training_losses[nnData.training_losses.length - 1]?.toFixed(4) : 'N/A'}
+`;
+            }
+
+            if (analysisData.pcaResult) {
+                prompt += `\n### PCA降维分析:
+- 主成分数量: ${analysisData.pcaResult.n_components}
+- 总方差解释率: ${(analysisData.pcaResult.total_variance_explained * 100).toFixed(1)}%
+`;
+            }
+
+            prompt += `
+请从以下几个维度提供专业的分析见解：
+
+1. **整体表现分析**: 评价IP项目的整体表现水平和分布特点
+2. **关键指标解读**: 解释重要指标的影响和意义
+3. **优劣势识别**: 指出表现优秀和需要改进的IP项目
+4. **发展建议**: 基于数据分析结果提供具体的改进建议
+5. **趋势预测**: 分析可能的发展趋势和机会
+
+请用中文回答，语言要专业但易懂，每个维度的分析要具体且有针对性。`;
+        }
+
+        // 调用DeepSeek API - 尝试多个可能的模型名称
+        const modelOptions = [
+            'gpt-4o',
+        ];
+        
+        let deepSeekResponse = null;
+        let lastError = null;
+        
+        // 尝试不同的模型
+        for (const modelName of modelOptions) {
+            try {
+                console.log(`尝试使用模型: ${modelName}`);
+                
+                deepSeekResponse = await fetch('https://xiaoai.plus/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer sk-ETN8d74TXXyvflkTvlNmceQCD6eYP4T5ooPBWzGWslWsV9X0'
+                    },
+                    body: JSON.stringify({
+                        model: modelName,
+                        messages: [
+                            {
+                                role: 'system',
+                                content: '你是一位专业的数据分析师，擅长分析少数民族体育IP评估数据，能够提供深入的商业洞察和建议。'
+                            },
+                            {
+                                role: 'user',
+                                content: prompt
+                            }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 2000
+                    })
+                });
+                
+                if (deepSeekResponse.ok) {
+                    console.log(`成功使用模型: ${modelName}`);
+                    break;
+                } else {
+                    const errorText = await deepSeekResponse.text();
+                    console.log(`模型 ${modelName} 失败:`, errorText);
+                    lastError = `模型 ${modelName}: ${errorText}`;
+                    deepSeekResponse = null;
+                }
+            } catch (error) {
+                console.log(`模型 ${modelName} 异常:`, error.message);
+                lastError = `模型 ${modelName}: ${error.message}`;
+                deepSeekResponse = null;
+            }
+        }
+
+        if (!deepSeekResponse || !deepSeekResponse.ok) {
+            throw new Error(`DeepSeek API调用失败: ${lastError}`);
+        }
+
+        const deepSeekData = await deepSeekResponse.json();
+        
+        if (!deepSeekData.choices || !deepSeekData.choices[0] || !deepSeekData.choices[0].message) {
+            throw new Error('DeepSeek API返回数据格式错误');
+        }
+
+        const analysis = deepSeekData.choices[0].message.content;
+
+        res.json({
+            success: true,
+            data: {
+                analysis,
+                model: 'deepseek-chat',
+                usage: deepSeekData.usage,
+                timestamp: new Date().toISOString()
+            },
+            message: 'AI分析完成'
+        });
+
+    } catch (error) {
+        console.error('AI分析失败:', error);
+        res.status(500).json({
+            success: false,
+            message: `AI分析失败: ${error.message}`,
+            error: error.message
         });
     }
 });

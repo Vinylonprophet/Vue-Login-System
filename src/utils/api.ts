@@ -354,12 +354,24 @@ export const ipApi = {
     apiRequest<ApiResponse<null>>('/api/ip/clear-all', {
       method: 'DELETE',
     }),
+
+  // AI分析接口
+  aiAnalysis: (analysisData: any, chartTypes: string[]) =>
+    apiRequest<ApiResponse<{
+      analysis: string;
+      model: string;
+      usage: any;
+      timestamp: string;
+    }>>('/api/ip/ai-analysis', {
+      method: 'POST',
+      body: JSON.stringify({ analysisData, chartTypes }),
+    })
 };
 
 // 认证API实例
 const authApi = new ApiClient(API_BASE_URL);
 
-export { authApi };
+export { authApi }; 
 
 // 为了兼容性，也导出为apiClient
 export const apiClient = authApi;
