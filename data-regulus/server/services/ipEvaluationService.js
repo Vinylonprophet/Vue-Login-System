@@ -343,10 +343,12 @@ class IPEvaluationService {
         const testIPs = [];
         const counties = ['莎车县', '泽普县', '叶城县', '巴楚县'];
         const sports = ['刁羊', '赛马', '达瓦孜', '押加', '赛骆驼'];
+        const experts = ['专家A', '专家B', '专家C', '专家D', '专家E'];
         
         for (let i = 0; i < count; i++) {
             const name = `${sports[i % sports.length]}_测试${i + 1}`;
             const group = counties[i % counties.length];
+            const expert = experts[i % experts.length];
             
             // 生成对象格式的指标数据
             const indicators = {};
@@ -357,6 +359,7 @@ class IPEvaluationService {
             testIPs.push({
                 name,
                 group,
+                expert,
                 indicators
             });
         }

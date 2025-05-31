@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Dashboard from '../views/Dashboard.vue'
-import IPEvaluation from '../views/IPEvaluation.vue'
 import IPManagement from '../views/IPManagement.vue'
 
 const routes = [
@@ -24,11 +23,6 @@ const routes = [
     path: '/dashboard',
     name: 'Dashboard',
     component: Dashboard
-  },
-  {
-    path: '/ip-evaluation',
-    name: 'IPEvaluation',
-    component: IPEvaluation
   },
   {
     path: '/ip-management',

@@ -74,6 +74,25 @@ router.get('/ips', async (req, res) => {
     }
 });
 
+// 获取特定IP的所有专家评分
+router.get('/ips/:name/:group/experts', async (req, res) => {
+    try {
+        const { name, group } = req.params;
+        const userId = req.user._id || req.user.id;
+        const expertScores = await ipModel.getExpertScoresByIP(name, group, userId);
+        
+        res.json({
+            success: true,
+            data: expertScores
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
 // 添加IP
 router.post('/ips', async (req, res) => {
     try {

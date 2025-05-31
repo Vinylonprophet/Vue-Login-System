@@ -19,9 +19,18 @@ class IPModel {
             this.ipsCollection = this.db.collection('ips');
             this.historyCollection = this.db.collection('evaluation_history');
             
-            // 创建索引
-            await this.ipsCollection.createIndex({ name: 1, group: 1 }, { unique: true });
+            // 删除旧的索引
+            try {
+                await this.ipsCollection.dropIndex('name_1_group_1');
+            } catch (error) {
+                // 索引不存在时忽略错误
+                console.log('旧索引不存在，跳过删除');
+            }
+            
+            // 创建新的复合唯一索引：name + group + expert + userId
+            await this.ipsCollection.createIndex({ name: 1, group: 1, expert: 1, userId: 1 }, { unique: true });
             await this.ipsCollection.createIndex({ group: 1 });
+            await this.ipsCollection.createIndex({ userId: 1 });
             await this.historyCollection.createIndex({ timestamp: -1 });
             
             console.log('IP数据库模型初始化成功');
@@ -54,6 +63,10 @@ class IPModel {
 
         if (!ip.group || typeof ip.group !== 'string') {
             throw new Error('IP组别必须是非空字符串');
+        }
+
+        if (!ip.expert || typeof ip.expert !== 'string') {
+            throw new Error('专家必须是非空字符串');
         }
 
         if (!ip.indicators) {
@@ -118,28 +131,32 @@ class IPModel {
         
         this.validateIP(ip);
         
-        // 检查名称和组别的组合是否已存在（仅在当前用户的数据中）
-        const existingIP = await this.ipsCollection.findOne({ 
+        // 检查是否存在相同name+group+expert+userId的记录
+        const existingExactMatch = await this.ipsCollection.findOne({ 
             name: ip.name, 
             group: ip.group,
+            expert: ip.expert,
             userId: userId
         });
-        if (existingIP) {
-            throw new Error(`IP名称 "${ip.name}" 在组别 "${ip.group}" 中已存在`);
+        if (existingExactMatch) {
+            throw new Error(`专家 "${ip.expert}" 对IP "${ip.name}" 在组别 "${ip.group}" 中的评分已存在`);
         }
 
-        const newIP = {
+        // 保存专家数据
+        const newExpertIP = {
             id: this.generateUniqueId(),
             name: ip.name,
             group: ip.group,
+            expert: ip.expert,
             indicators: this.normalizeIndicators(ip.indicators),
             userId: userId,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
 
-        const result = await this.ipsCollection.insertOne(newIP);
-        return { ...newIP, _id: undefined };
+        await this.ipsCollection.insertOne(newExpertIP);
+
+        return { ...newExpertIP, _id: undefined };
     }
 
     // 更新IP
@@ -186,10 +203,11 @@ class IPModel {
         }
 
         await this.ipsCollection.deleteOne({ id, userId });
+        
         return { ...deletedIP, _id: undefined };
     }
 
-    // 获取所有IP（仅当前用户）
+    // 获取所有IP（仅当前用户）- 前端计算平均值
     async getAllIPs(userId) {
         await this.ensureDB();
         
@@ -197,8 +215,39 @@ class IPModel {
             throw new Error('用户ID不能为空');
         }
         
-        const ips = await this.ipsCollection.find({ userId }).toArray();
-        return ips.map(ip => ({ ...ip, _id: undefined }));
+        const allIPs = await this.ipsCollection.find({ userId }).toArray();
+        
+        // 按name+group分组
+        const groupedIPs = {};
+        allIPs.forEach(ip => {
+            const key = `${ip.name}_${ip.group}`;
+            if (!groupedIPs[key]) {
+                groupedIPs[key] = [];
+            }
+            groupedIPs[key].push(ip);
+        });
+        
+        // 对每个分组，如果有多个专家则显示专家总数，否则显示单一记录
+        const resultIPs = [];
+        Object.values(groupedIPs).forEach(ips => {
+            if (ips.length === 1) {
+                // 只有一个专家记录，直接显示
+                resultIPs.push({ ...ips[0], _id: undefined });
+            } else if (ips.length > 1) {
+                // 多个专家记录，创建一个聚合显示
+                const firstIP = ips[0];
+                resultIPs.push({ 
+                    ...firstIP,
+                    id: `group_${firstIP.name}_${firstIP.group}`, // 特殊ID标识聚合记录
+                    expert: `${ips.length}位专家评分`,
+                    expertCount: ips.length,
+                    _isGroup: true, // 标识这是聚合记录
+                    _id: undefined 
+                });
+            }
+        });
+        
+        return resultIPs;
     }
 
     // 根据组别筛选IP（仅当前用户）
@@ -213,7 +262,38 @@ class IPModel {
         
         await this.ensureDB();
         const ips = await this.ipsCollection.find({ group, userId }).toArray();
-        return ips.map(ip => ({ ...ip, _id: undefined }));
+        
+        // 按name分组（group已经过滤）
+        const groupedIPs = {};
+        ips.forEach(ip => {
+            const key = ip.name;
+            if (!groupedIPs[key]) {
+                groupedIPs[key] = [];
+            }
+            groupedIPs[key].push(ip);
+        });
+        
+        // 对每个分组，如果有多个专家则显示专家总数，否则显示单一记录
+        const resultIPs = [];
+        Object.values(groupedIPs).forEach(ips => {
+            if (ips.length === 1) {
+                // 只有一个专家记录，直接显示
+                resultIPs.push({ ...ips[0], _id: undefined });
+            } else if (ips.length > 1) {
+                // 多个专家记录，创建一个聚合显示
+                const firstIP = ips[0];
+                resultIPs.push({ 
+                    ...firstIP,
+                    id: `group_${firstIP.name}_${firstIP.group}`, // 特殊ID标识聚合记录
+                    expert: `${ips.length}位专家评分`,
+                    expertCount: ips.length,
+                    _isGroup: true, // 标识这是聚合记录
+                    _id: undefined 
+                });
+            }
+        });
+        
+        return resultIPs;
     }
 
     // 获取所有组别（仅当前用户）
@@ -250,6 +330,23 @@ class IPModel {
         
         const ip = await this.ipsCollection.findOne({ name, userId });
         return ip ? { ...ip, _id: undefined } : null;
+    }
+
+    // 根据IP名称和组别获取所有专家评分（仅当前用户）
+    async getExpertScoresByIP(name, group, userId) {
+        await this.ensureDB();
+        
+        if (!userId) {
+            throw new Error('用户ID不能为空');
+        }
+        
+        const expertScores = await this.ipsCollection.find({ 
+            name, 
+            group, 
+            userId 
+        }).toArray();
+        
+        return expertScores.map(score => ({ ...score, _id: undefined }));
     }
 
     // 批量添加IP

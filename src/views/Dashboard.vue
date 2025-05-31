@@ -530,8 +530,51 @@ const performComprehensiveAnalysis = async () => {
     return;
   }
   
-  // 获取选中的IP数据
-  const selectedIPData = ips.value.filter(ip => selectedIPs.value.indexOf(ip.id) !== -1);
+  // 获取选中的IP数据，并计算多专家平均值
+  const selectedIPData: IP[] = [];
+  for (const ipId of selectedIPs.value) {
+    const ip = ips.value.find(item => item.id === ipId);
+    if (!ip) continue;
+    
+    if (ip._isGroup) {
+      // 这是多专家聚合记录，需要获取所有专家数据并计算平均值
+      try {
+        const expertsResponse = await ipApi.getExpertScoresByIP(ip.name, ip.group);
+        if (expertsResponse.data && expertsResponse.data.length > 0) {
+          const expertScores = expertsResponse.data;
+          
+          // 计算平均值
+          const averageIndicators: Record<string, number> = {};
+          const allProperties = indicatorStructure.value.allProperties || Object.keys(expertScores[0].indicators);
+          
+          allProperties.forEach(property => {
+            const sum = expertScores.reduce((acc, expert) => {
+              return acc + (expert.indicators[property] || 0);
+            }, 0);
+            averageIndicators[property] = sum / expertScores.length;
+          });
+          
+          // 创建平均值IP记录
+          selectedIPData.push({
+            ...ip,
+            expert: `${expertScores.length}位专家平均`,
+            indicators: averageIndicators
+          });
+        }
+      } catch (error) {
+        console.error(`获取IP ${ip.name} 的专家数据失败:`, error);
+        addLog(`⚠️ 获取IP "${ip.name}" 的专家数据失败，跳过该IP`);
+      }
+    } else {
+      // 单一专家记录，直接使用
+      selectedIPData.push(ip);
+    }
+  }
+  
+  if (selectedIPData.length < 2) {
+    toast.warning('有效IP数量不足2个，无法进行分析');
+    return;
+  }
   
   // 临时存储分析结果，不立即设置到响应式变量
   let tempEvaluationResult: any = null;
@@ -558,9 +601,10 @@ const performComprehensiveAnalysis = async () => {
         
         addLog('=== 开始全面分析 ===');
         addLog(`选中IP数量: ${selectedIPs.value.length}`);
-        addLog(`选中IP列表: ${selectedIPData.map(ip => ip.name).join(', ')}`);
+        addLog(`有效分析IP数量: ${selectedIPData.length}`);
+        addLog(`分析IP列表: ${selectedIPData.map(ip => `${ip.name}(${ip.expert})`).join(', ')}`);
         
-        // 步骤1: 基础评估 - 只分析选中的IP
+        // 步骤1: 基础评估 - 使用计算好的平均值数据
         const response = await ipApi.evaluateSelected(selectedIPData, filteredThirdIndicators.value);
         if (response.data) {
           tempEvaluationResult = response.data;

@@ -80,9 +80,12 @@ export interface IP {
   id: string;
   name: string;
   group: string;
+  expert: string;
   indicators: Record<string, number>;
   createdAt: string;
   updatedAt: string;
+  expertCount?: number; // 专家数量（聚合记录）
+  _isGroup?: boolean; // 标识是否为聚合记录
 }
 
 export interface EvaluationResult {
@@ -224,10 +227,12 @@ export const ipApi = {
     }),
 
   // 获取所有IP
-  getAllIPs: (group?: string) => {
-    const params = group ? `?group=${encodeURIComponent(group)}` : '';
-    return apiRequest<ApiResponse<IP[]>>(`/api/ip/ips${params}`);
-  },
+  getAllIPs: (group?: string) =>
+    apiRequest<ApiResponse<IP[]>>(`/api/ip/ips${group ? `?group=${encodeURIComponent(group)}` : ''}`),
+
+  // 获取特定IP的所有专家评分
+  getExpertScoresByIP: (name: string, group: string) =>
+    apiRequest<ApiResponse<IP[]>>(`/api/ip/ips/${encodeURIComponent(name)}/${encodeURIComponent(group)}/experts`),
 
   // 添加IP
   addIP: (ip: Omit<IP, 'id' | 'createdAt' | 'updatedAt'>) =>

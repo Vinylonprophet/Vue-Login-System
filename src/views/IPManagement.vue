@@ -90,7 +90,7 @@
                 :key="ip.id" 
                 class="ip-item"
                 :class="{ active: selectedIP?.id === ip.id }"
-                @click="selectIP(ip)"
+                @click="openExpertPanel(ip)"
               >
                 <div class="ip-header">
                   <div class="ip-name">{{ ip.name }}</div>
@@ -100,6 +100,7 @@
                 </div>
                 <div class="ip-details">
                   <div class="ip-group">组别: {{ ip.group }}</div>
+                  <div class="ip-expert">专家: {{ ip.expert }}</div>
                   <div class="ip-indicators">指标数: {{ getIndicatorCount(ip.indicators) }}</div>
                 </div>
               </div>
@@ -130,6 +131,10 @@
                 <label>组别:</label>
                 <input v-model="ipForm.group" type="text" placeholder="请输入组别" />
               </div>
+              <div class="form-group">
+                <label>专家:</label>
+                <input v-model="ipForm.expert" type="text" placeholder="请输入专家姓名" />
+              </div>
             </div>
           </div>
 
@@ -156,6 +161,55 @@
             <button @click="saveIP" class="btn" :class="saveButtonClass">{{ saveButtonText }}</button>
             <button @click="clearForm" class="btn btn-secondary">清空表单</button>
             <button @click="fillRandomData" class="btn btn-warning">随机填充</button>
+          </div>
+        </div>
+
+        <!-- 多专家评分管理面板 -->
+        <div class="expert-panel" v-show="showExpertPanel">
+          <div class="expert-panel-header">
+            <h3>多专家评分管理</h3>
+            <button @click="closeExpertPanel" class="btn btn-secondary">返回</button>
+          </div>
+          
+          <div class="expert-info" v-if="selectedIPForExperts">
+            <h4>{{ selectedIPForExperts.name }} ({{ selectedIPForExperts.group }})</h4>
+            <p>共有 {{ expertScores.length }} 位专家评分</p>
+          </div>
+
+          <!-- 平均值显示 -->
+          <div class="average-scores" v-if="Object.keys(averageScores).length > 0">
+            <h4>平均评分</h4>
+            <div class="average-grid">
+              <div v-for="(score, indicator) in averageScores" :key="indicator" class="average-item">
+                <span class="indicator-name">{{ indicator }}</span>
+                <span class="average-value">{{ score.toFixed(1) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 专家评分列表 -->
+          <div class="expert-scores-list">
+            <h4>专家评分详情</h4>
+            <div class="expert-cards">
+              <div v-for="expert in expertScores" :key="expert.id" class="expert-card">
+                <div class="expert-card-header">
+                  <h5>{{ expert.expert }}</h5>
+                  <div class="expert-actions">
+                    <button @click="editExpertScore(expert)" class="btn-small btn-edit">编辑</button>
+                    <button @click="deleteExpertScore(expert)" class="btn-small btn-delete">删除</button>
+                  </div>
+                </div>
+                <div class="expert-indicators">
+                  <div v-for="indicator in filteredThirdIndicators.slice(0, 5)" :key="indicator" class="indicator-item">
+                    <span class="indicator-label">{{ indicator }}</span>
+                    <span class="indicator-score">{{ getExpertIndicatorScore(expert, indicator) }}</span>
+                  </div>
+                  <div v-if="filteredThirdIndicators.length > 5" class="more-indicators">
+                    还有 {{ filteredThirdIndicators.length - 5 }} 个指标...
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -229,12 +283,19 @@ const logs = ref<string[]>([]);
 
 // UI控制状态
 const showDataEntryPanel = ref(true);
+const showExpertPanel = ref(false); // 多专家评分面板
 
 // 表单数据
 const ipForm = reactive({
   name: '',
-  group: ''
+  group: '',
+  expert: ''
 });
+
+// 多专家评分相关状态
+const selectedIPForExperts = ref<{ name: string; group: string } | null>(null);
+const expertScores = ref<IP[]>([]);
+const averageScores = ref<Record<string, number>>({});
 
 // 编辑状态
 const editMode = ref(false);
@@ -242,19 +303,21 @@ const editingIPId = ref<string | null>(null);
 
 // 添加计算属性来判断当前操作模式
 const currentMode = computed(() => {
-  // 如果当前是编辑模式，返回'edit'
-  if (editMode.value) {
-    return 'edit';
+  // 检查是否真正的编辑操作：只有当前表单数据与原始IP完全一致时才是编辑
+  if (editMode.value && editingIPId.value && selectedIP.value) {
+    const isRealEdit = (
+      ipForm.name.trim() === selectedIP.value.name &&
+      ipForm.group.trim() === selectedIP.value.group &&
+      ipForm.expert.trim() === selectedIP.value.expert
+    );
+    
+    if (isRealEdit) {
+      return 'edit';
+    }
   }
   
-  // 如果不是编辑模式，检查当前输入的IP名称和组别是否同时已存在
-  const currentName = ipForm.name.trim();
-  const currentGroup = ipForm.group.trim();
-  if (currentName && currentGroup && ips.value.some(ip => ip.name === currentName && ip.group === currentGroup)) {
-    return 'update'; // 名称和组别都已存在，应该是更新操作
-  }
-  
-  return 'create'; // 新建操作
+  // 其他所有情况都是新建操作
+  return 'create';
 });
 
 // 计算属性：动态按钮文字
@@ -262,8 +325,6 @@ const saveButtonText = computed(() => {
   switch (currentMode.value) {
     case 'edit':
       return '保存修改';
-    case 'update':
-      return '修改IP';
     case 'create':
     default:
       return '保存IP';
@@ -275,8 +336,6 @@ const saveButtonClass = computed(() => {
   switch (currentMode.value) {
     case 'edit':
       return 'btn-info'; // 蓝色 - 编辑模式
-    case 'update':
-      return 'btn-warning'; // 橙色 - 更新现有IP
     case 'create':
     default:
       return 'btn-primary'; // 绿色 - 创建新IP
@@ -359,8 +418,8 @@ const loadStatistics = async () => {
 };
 
 const saveIP = async () => {
-  if (!ipForm.name.trim() || !ipForm.group.trim()) {
-    toast.warning('请填写IP名称和组别');
+  if (!ipForm.name.trim() || !ipForm.group.trim() || !ipForm.expert.trim()) {
+    toast.warning('请填写IP名称、组别和专家姓名');
     return;
   }
   
@@ -384,37 +443,24 @@ const saveIP = async () => {
     const ipData = {
       name: ipForm.name.trim(),
       group: ipForm.group.trim(),
+      expert: ipForm.expert.trim(),
       indicators
     };
     
-    // 检查操作模式
+    // 使用计算属性来判断操作模式
     const mode = currentMode.value;
-    let targetIPId = editingIPId.value;
     
-    // 如果是update模式（名称和组别都已存在但不是从选择IP进入的编辑模式）
-    if (mode === 'update' && !editMode.value) {
-      // 查找同名且同组的IP
-      const existingIP = ips.value.find(ip => ip.name === ipData.name && ip.group === ipData.group);
-      if (existingIP) {
-        targetIPId = existingIP.id;
-        // 确认是否要覆盖现有IP
-        const confirmed = confirm(`IP "${ipData.name}" (组别: ${ipData.group}) 已存在，是否要修改现有数据？`);
-        if (!confirmed) {
-          loading.value = false;
-          return;
-        }
-      }
-    }
-    
-    if ((mode === 'edit' || mode === 'update') && targetIPId) {
+    if (mode === 'edit') {
+      // 真正的编辑模式：更新现有IP
       loadingText.value = '更新IP中...';
-      await ipApi.updateIP(targetIPId, ipData);
-      addLog(`已更新IP: ${ipData.name} (组别: ${ipData.group})`);
+      await ipApi.updateIP(editingIPId.value!, ipData);
+      addLog(`已更新IP: ${ipData.name} (组别: ${ipData.group}, 专家: ${ipData.expert})`);
       toast.success(`IP "${ipData.name}" 更新成功！`);
     } else {
+      // 创建模式：添加新IP
       loadingText.value = '保存IP中...';
       await ipApi.addIP(ipData);
-      addLog(`已添加IP: ${ipData.name} (组别: ${ipData.group})`);
+      addLog(`已添加IP: ${ipData.name} (组别: ${ipData.group}, 专家: ${ipData.expert})`);
       toast.success(`IP "${ipData.name}" 保存成功！`);
     }
     
@@ -434,9 +480,14 @@ const saveIP = async () => {
 const selectIP = (ip: IP) => {
   selectedIP.value = ip;
   
+  // 设置为编辑模式
+  editMode.value = true;
+  editingIPId.value = ip.id;
+  
   // 更新表单和指标值
   ipForm.name = ip.name;
   ipForm.group = ip.group;
+  ipForm.expert = ip.expert;
   
   // 清空现有的指标值
   initializeIndicatorValues();
@@ -459,7 +510,7 @@ const selectIP = (ip: IP) => {
     });
   }
   
-  addLog(`选择IP: ${ip.name}`);
+  addLog(`选择IP: ${ip.name} (专家: ${ip.expert})`);
 };
 
 // 辅助函数：将中文指标名转换为属性名
@@ -506,6 +557,7 @@ const deleteIP = async (ip: IP) => {
 const clearForm = () => {
   ipForm.name = '';
   ipForm.group = '';
+  ipForm.expert = '';
   editMode.value = false;
   editingIPId.value = null;
   initializeIndicatorValues();
@@ -514,8 +566,12 @@ const clearForm = () => {
 };
 
 const fillRandomData = () => {
-  ipForm.name = `测试IP_${Date.now()}`;
+  const projectName = ['赛马', '赛骆驼', '足球', '篮球', '乒乓球', '街舞'];
+  const experts = ['张教授', '李专家', '王研究员', '陈博士', '刘教授'];
+  
+  ipForm.name = projectName[Math.floor(Math.random() * projectName.length)];
   ipForm.group = `测试组_${Math.floor(Math.random() * 5) + 1}`;
+  ipForm.expert = experts[Math.floor(Math.random() * experts.length)];
   
   filteredThirdIndicators.value.forEach(indicator => {
     indicatorValues.value[indicator] = Math.floor(Math.random() * 100);
@@ -706,6 +762,133 @@ const getIndicatorCount = (indicators: any): number => {
   } else {
     return 0;
   }
+};
+
+// 多专家评分管理方法
+const openExpertPanel = async (ip: IP) => {
+  if (ip._isGroup) {
+    // 这是聚合记录，获取所有专家评分
+    selectedIP.value = ip; // 设置选中状态，用于左侧高亮显示
+    selectedIPForExperts.value = { name: ip.name, group: ip.group };
+    await loadExpertScores();
+    showExpertPanel.value = true;
+    showDataEntryPanel.value = false;
+    addLog(`打开多专家评分管理: ${ip.name} (${ip.group})`);
+  } else {
+    // 单一专家记录，直接编辑
+    selectIP(ip);
+    // 确保切换到编辑面板并关闭专家面板
+    showExpertPanel.value = false;
+    showDataEntryPanel.value = true;
+  }
+};
+
+const loadExpertScores = async () => {
+  if (!selectedIPForExperts.value) return;
+  
+  try {
+    loading.value = true;
+    const response = await ipApi.getExpertScoresByIP(
+      selectedIPForExperts.value.name, 
+      selectedIPForExperts.value.group
+    );
+    if (response.data) {
+      expertScores.value = response.data;
+      calculateAverageScores();
+    }
+  } catch (error) {
+    console.error('加载专家评分失败:', error);
+    toast.fail('加载专家评分失败');
+  } finally {
+    loading.value = false;
+  }
+};
+
+const calculateAverageScores = () => {
+  if (expertScores.value.length === 0) {
+    averageScores.value = {};
+    return;
+  }
+  
+  const avgScores: Record<string, number> = {};
+  const allProperties = filteredThirdIndicators.value;
+  
+  allProperties.forEach(indicator => {
+    const propertyName = getPropertyNameForIndicator(indicator);
+    if (propertyName) {
+      const sum = expertScores.value.reduce((acc, expert) => {
+        return acc + (expert.indicators[propertyName] || 0);
+      }, 0);
+      avgScores[indicator] = sum / expertScores.value.length;
+    }
+  });
+  
+  averageScores.value = avgScores;
+};
+
+const editExpertScore = (expert: IP) => {
+  // 设置编辑状态
+  selectedIP.value = expert;
+  editMode.value = true;
+  editingIPId.value = expert.id;
+  
+  // 填充表单
+  ipForm.name = expert.name;
+  ipForm.group = expert.group;
+  ipForm.expert = expert.expert;
+  
+  // 填充指标值
+  initializeIndicatorValues();
+  filteredThirdIndicators.value.forEach(indicator => {
+    const propertyName = getPropertyNameForIndicator(indicator);
+    if (propertyName && expert.indicators[propertyName] !== undefined) {
+      indicatorValues.value[indicator] = expert.indicators[propertyName];
+    }
+  });
+  
+  // 切换到编辑面板
+  showExpertPanel.value = false;
+  showDataEntryPanel.value = true;
+  
+  addLog(`编辑专家评分: ${expert.expert} - ${expert.name}`);
+};
+
+const deleteExpertScore = async (expert: IP) => {
+  if (!confirm(`确定要删除专家 "${expert.expert}" 的评分吗？`)) return;
+  
+  try {
+    loading.value = true;
+    await ipApi.deleteIP(expert.id);
+    addLog(`已删除专家评分: ${expert.expert} - ${expert.name}`);
+    toast.success('专家评分删除成功');
+    
+    // 重新加载专家评分
+    await loadExpertScores();
+    await loadIPs(); // 刷新主列表
+  } catch (error) {
+    console.error('删除专家评分失败:', error);
+    toast.fail('删除专家评分失败');
+  } finally {
+    loading.value = false;
+  }
+};
+
+const closeExpertPanel = () => {
+  showExpertPanel.value = false;
+  showDataEntryPanel.value = true;
+  selectedIP.value = null; // 清空选中状态
+  selectedIPForExperts.value = null;
+  expertScores.value = [];
+  averageScores.value = {};
+  addLog('关闭多专家评分管理');
+};
+
+const getExpertIndicatorScore = (expert: IP, indicator: string): string => {
+  const propertyName = getPropertyNameForIndicator(indicator);
+  if (propertyName && expert.indicators[propertyName] !== undefined) {
+    return expert.indicators[propertyName].toFixed(1);
+  }
+  return '0.0';
 };
 </script>
 
@@ -1056,7 +1239,7 @@ const getIndicatorCount = (indicators: any): number => {
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  height: 600px;
+  height: 800px;
   display: flex;
   flex-direction: column;
 }
@@ -1066,7 +1249,7 @@ const getIndicatorCount = (indicators: any): number => {
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  height: 600px;
+  height: 800px;
   min-width: 0; /* 允许收缩 */
   display: flex;
   flex-direction: column;
@@ -1088,7 +1271,7 @@ const getIndicatorCount = (indicators: any): number => {
   display: flex;
   flex-direction: column;
   min-height: 0; /* 确保可以收缩 */
-  max-height: 450px; /* 为数据操作留出至少150px空间 */
+  max-height: 650px; /* 为数据操作留出至少150px空间 */
 }
 
 .ip-management-section h3 {
@@ -1131,8 +1314,8 @@ const getIndicatorCount = (indicators: any): number => {
   flex: 1;
   overflow-y: auto;
   padding-right: 6px;
-  max-height: 300px; /* 减少最大高度，为数据操作留出空间 */
-  min-height: 200px; /* 设置最小高度 */
+  max-height: 500px; /* 减少最大高度，为数据操作留出空间 */
+  min-height: 400px; /* 设置最小高度 */
 }
 
 .ip-list::-webkit-scrollbar {
@@ -1223,12 +1406,13 @@ const getIndicatorCount = (indicators: any): number => {
 
 .ip-details {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 4px;
   font-size: 12px;
   color: #6c757d;
 }
 
-.ip-group, .ip-indicators {
+.ip-group, .ip-expert, .ip-indicators {
   font-weight: 500;
 }
 
@@ -1436,7 +1620,7 @@ const getIndicatorCount = (indicators: any): number => {
 
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 15px;
 }
 
@@ -1643,5 +1827,209 @@ const getIndicatorCount = (indicators: any): number => {
   .form-actions .btn {
     width: 100%;
   }
+}
+
+/* 多专家评分面板样式 */
+.expert-panel {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  height: 800px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.expert-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.expert-panel-header h3 {
+  color: #2c3e50;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.expert-info {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 8px;
+  border-left: 4px solid #007bff;
+}
+
+.expert-info h4 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.expert-info p {
+  margin: 0;
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.average-scores {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%);
+  border-radius: 8px;
+  border-left: 4px solid #28a745;
+}
+
+.average-scores h4 {
+  margin: 0 0 15px 0;
+  color: #155724;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.average-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.average-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.indicator-name {
+  font-size: 12px;
+  color: #495057;
+  font-weight: 500;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.average-value {
+  font-size: 14px;
+  color: #28a745;
+  font-weight: bold;
+  min-width: 40px;
+  text-align: right;
+}
+
+.expert-scores-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.expert-scores-list h4 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 600;
+  padding-left: 8px;
+  border-left: 4px solid #ffc107;
+}
+
+.expert-cards {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 15px;
+  padding-right: 8px;
+}
+
+.expert-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 15px;
+  transition: all 0.2s ease;
+  height: fit-content;
+}
+
+.expert-card:hover {
+  background: #e3f2fd;
+  border-color: #007bff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,123,255,0.15);
+}
+
+.expert-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.expert-card-header h5 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.expert-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.expert-indicators {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.indicator-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  background: white;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.indicator-label {
+  color: #495057;
+  font-weight: 500;
+  flex: 1;
+  margin-right: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.indicator-score {
+  color: #007bff;
+  font-weight: bold;
+  min-width: 30px;
+  text-align: right;
+}
+
+.more-indicators {
+  padding: 4px 8px;
+  background: rgba(108, 117, 125, 0.1);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #6c757d;
+  text-align: center;
+  font-style: italic;
 }
 </style> 
