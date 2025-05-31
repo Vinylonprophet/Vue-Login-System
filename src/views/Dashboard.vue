@@ -330,6 +330,9 @@
           </span>
         </div>
         <div class="ai-chat-controls">
+          <button @click="startNewChat" class="ai-control-btn" title="新对话">
+            🆕
+          </button>
           <button @click="toggleAIMinimize" class="ai-control-btn" title="最小化">
             {{ isAIMinimized ? '📈' : '➖' }}
           </button>
@@ -1577,6 +1580,39 @@ const exportToPDF = async () => {
     addLog(`🤖 每个图表都将生成专业AI分析`);
     addLog(`⚡ 正在处理复杂图表，请耐心等待...`);
     
+    // 确保所有图表都已正确渲染后再开始导出
+    addLog(`🔍 开始图表状态检查...`);
+    loadingText.value = '检查图表状态...';
+    
+    for (const chart of validCharts) {
+      if (!chart.condition) continue;
+      
+      // 切换到对应图表
+      activeChart.value = chart.id;
+      await nextTick();
+      await new Promise(resolve => setTimeout(resolve, 3000)); // 增加到3秒等待切换
+      
+      // 检查图表是否可见和有内容
+      const canvasId = getCanvasId(chart.id);
+      const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
+      
+      if (canvas) {
+        const chartInstance = Chart.getChart(canvas);
+        if (chartInstance && chartInstance.data && chartInstance.data.datasets && chartInstance.data.datasets.length > 0) {
+          addLog(`✅ 图表状态正常: ${getChineseChartTitle(chart.id)}`);
+        } else {
+          addLog(`⚠️ 图表可能需要重新渲染: ${getChineseChartTitle(chart.id)}`);
+          // 强制重新渲染
+          renderSpecificChart(chart.id);
+          await new Promise(resolve => setTimeout(resolve, 5000)); // 重新渲染后等待5秒
+        }
+      } else {
+        addLog(`⚠️ 图表Canvas未找到: ${getChineseChartTitle(chart.id)}`);
+      }
+    }
+    
+    addLog(`✅ 图表状态检查完成，开始导出...`);
+    
     // 创建临时容器来放置PDF内容
     const tempContainer = document.createElement('div');
     tempContainer.style.position = 'absolute';
@@ -1591,21 +1627,99 @@ const exportToPDF = async () => {
     tempContainer.style.backgroundColor = 'white';
     document.body.appendChild(tempContainer);
     
+    // 获取AI生成的研究背景内容
+    addLog(`🤖 正在生成研究背景与意义...`);
+    loadingText.value = '正在生成研究背景与意义...';
+    const backgroundContent = await getAIGeneratedContent('background', selectedIPs.value.length, filteredThirdIndicators.value.length);
+    
+    // 获取AI生成的研究方法内容
+    addLog(`🤖 正在生成研究方法...`);
+    loadingText.value = '正在生成研究方法...';
+    const methodContent = await getAIGeneratedContent('method', selectedIPs.value.length, filteredThirdIndicators.value.length);
+    
+    // 获取AI生成的摘要内容
+    addLog(`🤖 正在生成摘要...`);
+    loadingText.value = '正在生成摘要...';
+    const abstractContent = await getAIGeneratedContent('abstract', selectedIPs.value.length, filteredThirdIndicators.value.length);
+    
     // 创建PDF标题页
     const titleSection = document.createElement('div');
     titleSection.innerHTML = `
-      <div style="text-align: center; margin-bottom: 40px;">
-        <h1 style="font-size: 24px; color: #2c3e50; margin-bottom: 20px;">少数民族体育IP分析报告</h1>
-        <p style="font-size: 14px; color: #666;">生成时间: ${new Date().toLocaleString('zh-CN')}</p>
-        <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px;">
-          <h3 style="margin-bottom: 15px;">分析概况</h3>
-          <p>分析IP总数: ${selectedIPs.value.length}</p>
-          <p>使用指标数: ${filteredThirdIndicators.value.length}</p>
-          <p>生成系统: 少数民族体育IP评估系统</p>
+      <div style="text-align: center; margin-bottom: 60px; padding: 40px 0;">
+        <h1 style="font-size: 28px; color: #2c3e50; margin-bottom: 30px; font-weight: bold; line-height: 1.4;">
+          基于多维评价体系的少数民族体育IP<br>品牌塑造路径研究
+        </h1>
+        <div style="margin: 30px 0; font-size: 16px; color: #666; line-height: 1.8;">
+          <p><strong>研究时间：</strong>${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <p><strong>样本规模：</strong>${selectedIPs.value.length}个体育IP项目</p>
+          <p><strong>评价指标：</strong>${filteredThirdIndicators.value.length}项核心指标</p>
+          <p><strong>分析方法：</strong>遗传算法优化、神经网络建模、SHAP解释性分析</p>
+        </div>
+      </div>
+      
+      <div style="margin-bottom: 40px; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
+        <h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">摘要</h2>
+        <div style="text-align: justify; line-height: 1.8;">
+          ${abstractContent}
         </div>
       </div>
     `;
     tempContainer.appendChild(titleSection);
+    
+    // 添加目录
+    const tocSection = document.createElement('div');
+    tocSection.style.pageBreakBefore = 'always';
+    tocSection.innerHTML = `
+      <div style="margin-bottom: 40px;">
+        <h2 style="font-size: 22px; color: #2c3e50; margin-bottom: 30px; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px;">目录</h2>
+        <div style="line-height: 2.0; font-size: 14px;">
+          <p>1. 研究背景与意义 ......................................................... 3</p>
+          <p>2. 研究方法与数据来源 .................................................... 4</p>
+          <p>3. 评价体系构建与算法优化 ............................................... 5</p>
+          <p>4. 实证分析结果 ......................................................... 6</p>
+          <p>5. 品牌塑造路径设计 ..................................................... ${6 + validCharts.length}</p>
+          <p>6. 政策建议与实践指导 ................................................... ${7 + validCharts.length}</p>
+          <p>7. 结论与展望 .......................................................... ${8 + validCharts.length}</p>
+        </div>
+      </div>
+    `;
+    tempContainer.appendChild(tocSection);
+    
+    // 添加研究背景（AI生成内容）
+    const backgroundSection = document.createElement('div');
+    backgroundSection.style.pageBreakBefore = 'always';
+    backgroundSection.innerHTML = `
+      <div style="margin-bottom: 40px;">
+        ${backgroundContent}
+      </div>
+    `;
+    tempContainer.appendChild(backgroundSection);
+    
+    // 添加研究方法（AI生成内容）
+    const methodSection = document.createElement('div');
+    methodSection.style.pageBreakBefore = 'always';
+    methodSection.innerHTML = `
+      <div style="margin-bottom: 40px;">
+        ${methodContent}
+      </div>
+    `;
+    tempContainer.appendChild(methodSection);
+    
+    // 添加实证分析章节标题
+    const analysisHeaderSection = document.createElement('div');
+    analysisHeaderSection.style.pageBreakBefore = 'always';
+    
+    // 获取AI生成的实证分析引言
+    addLog(`🤖 正在生成实证分析引言...`);
+    loadingText.value = '正在生成实证分析引言...';
+    const analysisIntroContent = await getAIGeneratedContent('analysis_intro', selectedIPs.value.length, filteredThirdIndicators.value.length);
+    
+    analysisHeaderSection.innerHTML = `
+      <div style="margin-bottom: 30px;">
+        ${analysisIntroContent}
+      </div>
+    `;
+    tempContainer.appendChild(analysisHeaderSection);
     
     // 处理每个图表
     let processedCharts = 0;
@@ -1630,9 +1744,42 @@ const exportToPDF = async () => {
           activeChart.value = chart.id;
           await nextTick();
           
-          let waitTime = chart.id === 'shap' ? 3000 : chart.id === 'neural' || chart.id === 'importance' ? 2500 : 2000;
-          addLog(`⏳ 等待图表渲染 (${waitTime}ms): ${chineseTitle}`);
+          // 强制等待更长时间确保图表完全渲染
+          let waitTime = chart.id === 'shap' ? 20000 : chart.id === 'neural' || chart.id === 'importance' ? 15000 : 10000;
+          addLog(`⏳ 等待图表渲染 (${waitTime/1000}秒): ${chineseTitle}`);
+          loadingText.value = `等待图表渲染 ${Math.ceil(waitTime/1000)}秒: ${chineseTitle}`;
           await new Promise(resolve => setTimeout(resolve, waitTime));
+          await nextTick();
+          
+          // 强制重新渲染当前图表
+          addLog(`🔄 强制重新渲染图表: ${chineseTitle}`);
+          switch (chart.id) {
+            case 'fitness':
+              renderFitnessChart();
+              break;
+            case 'scores':
+              renderScoreChart();
+              break;
+            case 'radar':
+              renderRadarChart();
+              break;
+            case 'neural':
+              renderNeuralNetworkCharts();
+              break;
+            case 'importance':
+              renderNeuralNetworkCharts();
+              break;
+            case 'shap':
+              renderSHAPChart();
+              break;
+            case 'pca':
+              renderPCAChart();
+              break;
+          }
+          
+          // 再次等待渲染完成 - 更长时间
+          addLog(`⏳ 等待重新渲染完成: ${chineseTitle}`);
+          await new Promise(resolve => setTimeout(resolve, 8000)); // 增加到8秒
           await nextTick();
           
           // 修复canvas ID匹配问题
@@ -1663,66 +1810,234 @@ const exportToPDF = async () => {
               canvasId = `${chart.id}Chart`;
           }
           
-          const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
-          if (canvas) {
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-              const hasContent = imageData.data.some(value => value !== 0);
+          // 多次重试获取图表
+          let retryCount = 0;
+          const maxRetries = 3;
+          
+          while (retryCount < maxRetries && (!imageDataUrl || imageDataUrl === 'data:,')) {
+            retryCount++;
+            addLog(`🔄 第${retryCount}次尝试获取图表: ${chineseTitle}`);
+            
+            // 每次重试前先等待更长时间
+            if (retryCount > 1) {
+              addLog(`⏳ 重试等待 5秒...`);
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+            
+            const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
+            addLog(`🔍 查找Canvas元素: ${canvasId}`);
+            
+            if (canvas) {
+              addLog(`✅ 找到Canvas元素: ${canvasId}, 尺寸: ${canvas.width}x${canvas.height}`);
               
-              if (hasContent) {
-                imageDataUrl = canvas.toDataURL('image/png', 1.0);
-                addLog(`✅ 成功获取图表数据: ${chineseTitle}`);
-              } else {
-                addLog(`⚠️ 图表内容为空: ${chineseTitle}`);
+              // 检查Canvas是否有实际内容
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const hasContent = imageData.data.some(value => value !== 0);
+                addLog(`Canvas内容检查: ${hasContent ? '有内容' : '空白'}, 总像素: ${imageData.data.length/4}`);
+                
+                if (!hasContent && retryCount < maxRetries) {
+                  addLog(`⚠️ Canvas内容为空，强制重新渲染...`);
+                  renderSpecificChart(chart.id);
+                  await new Promise(resolve => setTimeout(resolve, 6000)); // 等待6秒重新渲染
+                  continue; // 跳到下一次重试
+                }
+              }
+              
+              // 检查Chart.js实例
+              const chartInstance = Chart.getChart(canvas);
+              if (chartInstance) {
+                addLog(`✅ 找到Chart.js实例: ${chineseTitle}`);
+                
+                // 强制更新图表
+                try {
+                  chartInstance.update('none'); // 立即更新，不使用动画
+                  await new Promise(resolve => setTimeout(resolve, 2000)); // 等待更新完成
+                  
+                  // 使用Chart.js的toBase64Image方法（更可靠）
+                  imageDataUrl = chartInstance.toBase64Image('image/png', 1.0);
+                  addLog(`✅ 通过Chart.js实例获取图表数据: ${chineseTitle} (重试${retryCount}次)`);
+                  break; // 成功获取，退出重试循环
+                } catch (chartError) {
+                  addLog(`⚠️ Chart.js导出失败（重试${retryCount}），错误: ${chartError}`);
+                }
+              }
+              
+              // 如果Chart.js方法失败，尝试Canvas方法
+              if (ctx) {
+                try {
+                  imageDataUrl = canvas.toDataURL('image/png', 1.0);
+                  addLog(`✅ 通过Canvas方法获取图表数据: ${chineseTitle} (重试${retryCount}次)`);
+                  break; // 成功获取，退出重试循环
+                } catch (canvasError) {
+                  addLog(`❌ Canvas导出失败（重试${retryCount}），错误: ${canvasError}`);
+                }
+              }
+            } else {
+              addLog(`❌ 未找到Canvas元素: ${canvasId} (重试${retryCount}次)`);
+              
+              if (retryCount === 1) {
+                // 第一次重试时显示所有canvas元素
+                const allCanvases = document.querySelectorAll('canvas');
+                addLog(`页面中共有 ${allCanvases.length} 个Canvas元素`);
+                allCanvases.forEach((c, index) => {
+                  addLog(`Canvas ${index}: id="${c.id}", class="${c.className}"`);
+                });
               }
             }
-          } else {
-            addLog(`⚠️ 未找到图表canvas元素: ${canvasId}`);
+          }
+          
+          // 如果重试后仍然失败，最后一次尝试使用html2canvas
+          if ((!imageDataUrl || imageDataUrl === 'data:,') && chart.id !== 'cluster') {
+            addLog(`🎯 最后尝试：使用html2canvas捕获图表区域: ${chineseTitle}`);
+            try {
+              const chartPanel = document.querySelector(`[v-show="${activeChart.value === chart.id}"] .chart, .chart-panel:not([style*="display: none"]) .chart`) as HTMLElement;
+              if (chartPanel) {
+                const chartCanvas = await html2canvas(chartPanel, {
+                  scale: 2,
+                  backgroundColor: '#ffffff',
+                  useCORS: true,
+                  allowTaint: true
+                });
+                imageDataUrl = chartCanvas.toDataURL('image/png', 1.0);
+                addLog(`✅ html2canvas成功捕获图表: ${chineseTitle}`);
+              }
+            } catch (html2canvasError) {
+              addLog(`❌ html2canvas也失败了: ${chineseTitle}, 错误: ${html2canvasError}`);
+            }
           }
         }
         
         if (imageDataUrl && imageDataUrl !== 'data:,') {
-          // 获取AI分析
-          addLog(`🤖 正在为图表 "${chineseTitle}" 生成AI分析...`);
-          loadingText.value = `生成AI分析 ${processedCharts}/${validCharts.length}: ${chineseTitle}`;
+          // 获取学术化的分析内容
+          addLog(`📝 正在为图表 "${chineseTitle}" 生成学术分析...`);
+          loadingText.value = `生成学术分析 ${processedCharts}/${validCharts.length}: ${chineseTitle}`;
           
-          let aiAnalysis = '';
+          let academicAnalysis = '';
           try {
-            aiAnalysis = await getChartAIAnalysis(chart.id);
-            addLog(`✅ AI分析已生成: ${chineseTitle}`);
+            academicAnalysis = await getAcademicAnalysis(chart.id);
+            addLog(`✅ 学术分析已生成: ${chineseTitle}`);
           } catch (error) {
-            console.warn(`AI分析失败 for ${chineseTitle}:`, error);
-            aiAnalysis = '该图表的AI分析暂时不可用。';
+            console.warn(`学术分析失败 for ${chineseTitle}:`, error);
+            academicAnalysis = getDefaultAcademicAnalysis(chart.id);
           }
           
-          // 创建图表段落
+          // 创建学术化的图表分析段落
           const chartSection = document.createElement('div');
-          chartSection.style.pageBreakBefore = 'always';
-          chartSection.style.marginBottom = '30px';
+          chartSection.style.marginBottom = '35px';
           chartSection.innerHTML = `
-            <div style="margin-bottom: 20px;">
-              <h2 style="font-size: 18px; color: #2c3e50; margin-bottom: 15px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">${chineseTitle}</h2>
-              <div style="text-align: center; margin-bottom: 15px;">
+            <div style="margin-bottom: 25px;">
+              <h3 style="font-size: 16px; color: #2c3e50; margin-bottom: 15px;">${getAcademicSectionTitle(chart.id)}</h3>
+              
+              <div style="text-align: center; margin: 20px 0;">
                 <img src="${imageDataUrl}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
+                <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px; font-style: italic;">
+                  图${processedCharts}. ${chineseTitle}
+                </p>
               </div>
-              <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #3498db;">
-                <h3 style="color: #2c3e50; margin-bottom: 10px; font-size: 16px;">🤖 AI智能分析</h3>
-                <p style="margin: 0; line-height: 1.8; text-align: justify;">${aiAnalysis}</p>
+              
+              <div style="text-align: justify; line-height: 1.8; margin-top: 15px;">
+                ${academicAnalysis}
               </div>
             </div>
           `;
           tempContainer.appendChild(chartSection);
           
-          addLog(`✅ 已添加图表到PDF: ${chineseTitle}`);
+          addLog(`✅ 已添加学术分析到论文: ${chineseTitle}`);
         } else {
-          addLog(`⚠️ 跳过图表: ${chineseTitle} (无有效图像数据)`);
+          addLog(`❌ 最终未能获取图表: ${chineseTitle} - 将添加重试提示`);
+          
+          // 生成分析但提示图表获取失败
+          let academicAnalysis = '';
+          try {
+            academicAnalysis = await getAcademicAnalysis(chart.id);
+            addLog(`✅ 文本分析已生成: ${chineseTitle}`);
+          } catch (error) {
+            console.warn(`文本分析失败 for ${chineseTitle}:`, error);
+            academicAnalysis = getDefaultAcademicAnalysis(chart.id);
+          }
+          
+          // 创建包含重试提示的分析段落
+          const chartSection = document.createElement('div');
+          chartSection.style.marginBottom = '35px';
+          chartSection.innerHTML = `
+            <div style="margin-bottom: 25px;">
+              <h3 style="font-size: 16px; color: #2c3e50; margin-bottom: 15px;">${getAcademicSectionTitle(chart.id)}</h3>
+              
+              <div style="padding: 30px; background: linear-gradient(135deg, #ffebe6 0%, #fff2e6 100%); border-radius: 12px; border: 2px solid #ff6b6b; text-align: center; margin: 20px 0; box-shadow: 0 4px 8px rgba(255,107,107,0.2);">
+                <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
+                <h4 style="color: #e74c3c; margin: 10px 0; font-size: 16px; font-weight: bold;">图表获取失败</h4>
+                <p style="margin: 8px 0; font-size: 14px; color: #666; line-height: 1.5;">
+                  <strong>建议解决方案：</strong><br>
+                  1. 确保所有图表在界面中完全显示<br>
+                  2. 等待更长时间后重新导出<br>
+                  3. 刷新页面重新分析后导出
+                </p>
+                <p style="margin: 8px 0; font-size: 12px; color: #999; font-style: italic;">
+                  图表类型：${chineseTitle} | Canvas ID: ${chart.id}Chart
+                </p>
+              </div>
+              
+              <div style="text-align: justify; line-height: 1.8; margin-top: 15px;">
+                <div style="padding: 15px; background: #f8f9fa; border-left: 4px solid #007bff; margin-bottom: 15px;">
+                  <strong style="color: #007bff;">💡 基于数据的分析结果：</strong>
+                </div>
+                ${academicAnalysis}
+              </div>
+            </div>
+          `;
+          tempContainer.appendChild(chartSection);
+          
+          addLog(`⚠️ 已添加重试提示和分析到论文: ${chineseTitle}`);
         }
       } catch (error) {
         const chineseTitle = chart.title;
         addLog(`❌ 处理图表失败: ${chineseTitle}`);
       }
     }
+    
+    // 添加品牌塑造路径章节（AI生成）
+    addLog(`🤖 正在生成品牌塑造路径设计...`);
+    loadingText.value = '正在生成品牌塑造路径设计...';
+    const brandingPathContent = await getAIGeneratedContent('branding_path', selectedIPs.value.length, filteredThirdIndicators.value.length);
+    
+    const brandingPathSection = document.createElement('div');
+    brandingPathSection.style.pageBreakBefore = 'always';
+    brandingPathSection.innerHTML = `
+      <div style="margin-bottom: 40px;">
+        ${brandingPathContent}
+      </div>
+    `;
+    tempContainer.appendChild(brandingPathSection);
+    
+    // 添加政策建议章节（AI生成）
+    addLog(`🤖 正在生成政策建议与实践指导...`);
+    loadingText.value = '正在生成政策建议与实践指导...';
+    const policySuggestionsContent = await getAIGeneratedContent('policy_suggestions', selectedIPs.value.length, filteredThirdIndicators.value.length);
+    
+    const policySection = document.createElement('div');
+    policySection.style.pageBreakBefore = 'always';
+    policySection.innerHTML = `
+      <div style="margin-bottom: 40px;">
+        ${policySuggestionsContent}
+      </div>
+    `;
+    tempContainer.appendChild(policySection);
+    
+    // 添加结论章节（AI生成）
+    addLog(`🤖 正在生成结论与展望...`);
+    loadingText.value = '正在生成结论与展望...';
+    const conclusionContent = await getAIGeneratedContent('conclusion', selectedIPs.value.length, filteredThirdIndicators.value.length);
+    
+    const conclusionSection = document.createElement('div');
+    conclusionSection.style.pageBreakBefore = 'always';
+    conclusionSection.innerHTML = `
+      <div style="margin-bottom: 40px;">
+        ${conclusionContent}
+      </div>
+    `;
+    tempContainer.appendChild(conclusionSection);
     
     // 恢复原来的激活图表
     activeChart.value = originalActiveChart;
@@ -1776,7 +2091,7 @@ const exportToPDF = async () => {
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-    const fileName = `少数民族体育IP分析报告_${dateStr}_${timeStr}.pdf`;
+    const fileName = `基于多维评价体系的少数民族体育IP品牌塑造路径研究_${dateStr}_${timeStr}.pdf`;
     
     // 保存PDF
     pdf.save(fileName);
@@ -2160,10 +2475,8 @@ const analyzeSpecificChart = async (chartId: string) => {
   await performAIAnalysis(analysisPrompt);
 };
 
-const performAIAnalysis = async (customPrompt?: string) => {
-  aiAnalysisLoading.value = true;
-  addLog('🤖 开始AI分析...');
-  
+// 统一的AI分析函数 - PDF和对话框共享
+const performUnifiedAIAnalysis = async (prompt: string, isForPDF: boolean = false): Promise<string> => {
   try {
     // 准备分析数据
     const analysisData = {
@@ -2175,7 +2488,7 @@ const performAIAnalysis = async (customPrompt?: string) => {
       shapResult: shapResult.value,
       pcaResult: pcaResult.value,
       advancedClusterResult: advancedClusterResult.value,
-      customPrompt
+      customPrompt: prompt
     };
     
     // 获取当前可用的图表类型
@@ -2185,16 +2498,39 @@ const performAIAnalysis = async (customPrompt?: string) => {
     
     const response = await ipApi.aiAnalysis(analysisData, availableCharts);
     
-    if (response.success) {
-      aiAnalysisResult.value = response.data;
-      addChatMessage('ai', response.data?.analysis || '分析完成，但未返回结果');
-      addLog('🎉 AI分析完成');
+    if (response.success && response.data?.analysis) {
+      // 如果不是PDF调用，添加到聊天记录
+      if (!isForPDF) {
+        addChatMessage('ai', response.data.analysis);
+      }
+      return response.data.analysis;
     } else {
-      throw new Error(response.message || 'AI分析失败');
+      const errorMsg = '抱歉，分析失败了。请稍后再试。';
+      if (!isForPDF) {
+        addChatMessage('ai', errorMsg);
+      }
+      return errorMsg;
     }
   } catch (error) {
     console.error('AI分析失败:', error);
-    addChatMessage('ai', `抱歉，分析失败了：${error}`);
+    const errorMsg = `分析出错：${error}`;
+    if (!isForPDF) {
+      addChatMessage('ai', errorMsg);
+    }
+    return errorMsg;
+  }
+};
+
+// 修改performAIAnalysis为使用统一函数
+const performAIAnalysis = async (customPrompt?: string) => {
+  aiAnalysisLoading.value = true;
+  addLog('🤖 开始AI分析...');
+  
+  try {
+    await performUnifiedAIAnalysis(customPrompt || '请对当前数据进行全面分析', false);
+    addLog('🎉 AI分析完成');
+  } catch (error) {
+    console.error('AI分析失败:', error);
     addLog(`❌ AI分析失败: ${error}`);
     toast.fail('AI分析失败，请重试');
   } finally {
@@ -2380,6 +2716,277 @@ const getChineseChartTitle = (chartId: string): string => {
 };
 
 // Excel导出功能
+const getAcademicAnalysis = async (chartId: string): Promise<string> => {
+  try {
+    let analysisPrompt = '';
+    
+    // 准备图表特定的数据上下文
+    let chartSpecificData = '';
+    
+    switch (chartId) {
+      case 'fitness':
+        if (evaluationResult.value?.fitnessHistory) {
+          const lastGen = evaluationResult.value.fitnessHistory.length;
+          const finalFitness = evaluationResult.value.fitnessHistory[lastGen - 1];
+          const avgFinalFitness = finalFitness.reduce((a, b) => a + b, 0) / finalFitness.length;
+          chartSpecificData = `迭代次数：${lastGen}代，最终平均适应度：${avgFinalFitness.toFixed(4)}`;
+        }
+        analysisPrompt = `基于遗传算法适应度曲线图，分析算法的收敛过程。${chartSpecificData}。只分析这个图表显示的信息，不要提及其他图表。要求：专注于适应度变化趋势、收敛速度、优化效果。字数控制在300-500字。`;
+        break;
+        
+      case 'scores':
+        if (evaluationResult.value?.evaluation) {
+          const scores = evaluationResult.value.evaluation.map(e => e.score);
+          const maxScore = Math.max(...scores);
+          const minScore = Math.min(...scores);
+          chartSpecificData = `IP数量：${scores.length}个，最高分：${maxScore.toFixed(2)}，最低分：${minScore.toFixed(2)}`;
+        }
+        analysisPrompt = `基于IP评分分布柱状图，分析各IP的得分情况。${chartSpecificData}。只分析评分分布特征，不要提及其他分析方法。要求：专注于分数分布、差异性、优劣势项目识别。字数控制在300-500字。`;
+        break;
+        
+      case 'radar':
+        if (evaluationResult.value?.weights) {
+          const topN = 5;
+          const sortedWeights = evaluationResult.value.weights
+            .map((w, i) => ({ weight: w, index: i }))
+            .sort((a, b) => b.weight - a.weight)
+            .slice(0, topN);
+          chartSpecificData = `最重要的${topN}个指标权重：${sortedWeights.map(w => w.weight.toFixed(4)).join(', ')}`;
+        }
+        analysisPrompt = `基于指标权重雷达图，分析各维度的相对重要性。${chartSpecificData}。只分析权重分布，不要提及其他图表。要求：专注于权重大小、指标重要性排序、维度平衡性。字数控制在300-500字。`;
+        break;
+        
+      case 'neural':
+        if (neuralNetworkResult.value?.training_losses) {
+          const losses = neuralNetworkResult.value.training_losses;
+          const initialLoss = losses[0];
+          const finalLoss = losses[losses.length - 1];
+          chartSpecificData = `训练轮次：${losses.length}，初始损失：${initialLoss.toFixed(4)}，最终损失：${finalLoss.toFixed(4)}`;
+        }
+        analysisPrompt = `基于神经网络训练损失曲线，分析模型的训练过程。${chartSpecificData}。只分析损失变化，不要提及其他分析。要求：专注于损失下降趋势、收敛情况、训练效果评估。字数控制在300-500字。`;
+        break;
+        
+      case 'importance':
+        if (neuralNetworkResult.value?.feature_importance) {
+          const importance = neuralNetworkResult.value.feature_importance;
+          const maxImportance = Math.max(...importance);
+          const topFeatures = importance
+            .map((imp: number, i: number) => ({ imp, index: i }))
+            .sort((a: {imp: number}, b: {imp: number}) => b.imp - a.imp)
+            .slice(0, 3);
+          chartSpecificData = `特征数量：${importance.length}，最高重要性：${maxImportance.toFixed(4)}`;
+        }
+        analysisPrompt = `基于特征重要性柱状图，分析各特征对模型的贡献。${chartSpecificData}。只分析特征重要性，不要提及其他内容。要求：专注于重要特征识别、特征贡献度差异、关键因素分析。字数控制在300-500字。`;
+        break;
+        
+      case 'shap':
+        if (shapResult.value?.ip_explanations) {
+          const ipCount = shapResult.value.ip_explanations.length;
+          chartSpecificData = `分析样本数：${ipCount}个IP`;
+        }
+        analysisPrompt = `基于SHAP蜂群图，分析模型的可解释性。${chartSpecificData}。只分析SHAP值分布，不要提及其他方法。要求：专注于特征贡献度、正负影响、个体差异性。字数控制在300-500字。`;
+        break;
+        
+      case 'pca':
+        if (pcaResult.value?.explained_variance_ratio) {
+          const var1 = (pcaResult.value.explained_variance_ratio[0] * 100).toFixed(1);
+          const var2 = (pcaResult.value.explained_variance_ratio[1] * 100).toFixed(1);
+          chartSpecificData = `PC1方差贡献：${var1}%，PC2方差贡献：${var2}%`;
+        }
+        analysisPrompt = `基于PCA降维散点图，分析数据的主成分结构。${chartSpecificData}。只分析降维结果，不要提及其他分析。要求：专注于主成分解释、数据分布模式、样本聚集特征。字数控制在300-500字。`;
+        break;
+        
+      case 'cluster':
+        if (advancedClusterResult.value?.clustering_results) {
+          const clusterCount = new Set(advancedClusterResult.value.clustering_results.map((r: any) => r.cluster)).size;
+          chartSpecificData = `聚类数量：${clusterCount}个`;
+        }
+        analysisPrompt = `基于聚类分析图（含凸包），分析样本的分组特征。${chartSpecificData}。只分析聚类结果，不要提及其他内容。要求：专注于聚类质量、分组特征、类间差异。字数控制在300-500字。`;
+        break;
+        
+      default:
+        return getDefaultAcademicAnalysis(chartId);
+    }
+    
+    // 使用AI分析，传入更精确的提示
+    const analysisResponse = await performUnifiedAIAnalysis(analysisPrompt, true);
+    
+    // 清理并学术化处理
+    return analysisResponse
+      .replace(/<[^>]*>/g, '') // 移除HTML标签
+      .replace(/\*\*/g, '') // 移除粗体标记
+      .replace(/###?\s*/g, '') // 移除标题标记
+      .replace(/AI分析|人工智能|智能分析|机器学习模型/g, '计算模型')
+      .replace(/通过分析|可以看出|显示了/g, '分析结果表明')
+      .replace(/建议|推荐/g, '研究发现')
+      .trim();
+  } catch (error) {
+    console.error(`学术分析失败 for chart ${chartId}:`, error);
+    return getDefaultAcademicAnalysis(chartId);
+  }
+};
+
+// 获取默认学术化分析
+const getDefaultAcademicAnalysis = (chartId: string): string => {
+  const defaultAnalyses: Record<string, string> = {
+    'fitness': '遗传算法的适应度函数在迭代过程中呈现良好的收敛特性，表明权重优化策略具有较强的搜索能力和稳定性。算法的收敛速度和最终适应度值反映了评价体系设计的合理性，为后续分析提供了可靠的权重配置基础。',
+    'scores': '评分分布结果显示了样本间的差异化特征，体现了评价体系的区分度和敏感性。不同项目在综合得分上的分布规律为识别优势项目和发展短板提供了量化依据，有助于制定针对性的改进策略。',
+    'radar': '权重雷达图揭示了各维度指标在评价体系中的相对重要性，体现了专家知识与数据驱动相结合的权重配置方法。主要维度的权重分布符合理论预期，为评价结果的可信度提供了支撑。',
+    'neural': '神经网络模型在训练过程中展现出良好的学习能力，损失函数的下降趋势表明模型能够有效捕捉输入特征与目标变量间的非线性关系。模型的收敛性能为复杂评价问题的建模提供了有效工具。',
+    'importance': '特征重要性分析结果识别了对模型预测具有关键影响的因子，为理解评价机制提供了深层次洞察。重要性排序为特征选择和模型优化提供了科学依据，有助于提升预测准确性。',
+    'shap': 'SHAP值分析增强了模型的可解释性，通过量化各特征对预测结果的边际贡献，揭示了决策过程的透明度。这种解释性分析对于建立可信的评价模型具有重要意义。',
+    'pca': '主成分分析有效实现了高维数据的降维处理，前两个主成分包含了原始数据的主要信息。降维结果在保持数据结构完整性的同时，为后续分析提供了更加简洁的特征空间。',
+    'cluster': '聚类分析识别了样本的内在分组结构，不同簇的形成反映了项目在多维特征空间中的相似性模式。聚类结果为制定分类管理策略和识别典型发展模式提供了参考。'
+  };
+  
+  return defaultAnalyses[chartId] || '该维度的实证分析结果为研究提供了重要的数据支撑和理论验证。';
+};
+
+// 获取学术化章节标题
+const getAcademicSectionTitle = (chartId: string): string => {
+  const sectionTitles: Record<string, string> = {
+    'fitness': '4.1 权重优化算法收敛性分析',
+    'scores': '4.2 综合评价结果分布特征',
+    'radar': '4.3 指标权重配置合理性验证',
+    'neural': '4.4 神经网络模型学习性能',
+    'importance': '4.5 关键影响因子识别分析',
+    'shap': '4.6 模型可解释性分析结果',
+    'pca': '4.7 多维数据降维效果评估',
+    'cluster': '4.8 样本聚类结构特征分析'
+  };
+  
+  return sectionTitles[chartId] || '4.X 相关分析结果';
+};
+
+// 获取AI生成内容的通用函数
+const getAIGeneratedContent = async (contentType: string, ipCount: number, indicatorCount: number): Promise<string> => {
+  try {
+    let prompt = '';
+    
+    switch (contentType) {
+      case 'abstract':
+        prompt = `请为《基于多维评价体系的少数民族体育IP品牌塑造路径研究》撰写学术论文摘要。研究样本${ipCount}个IP项目，使用${indicatorCount}项指标。要求包含：研究背景、方法、主要发现、创新点、实践意义。字数400-500字，体现学术严谨性，包含关键词。`;
+        break;
+      case 'background':
+        prompt = `请撰写少数民族体育IP品牌塑造研究的背景与意义章节。包含：1.1研究背景(当前发展现状、存在问题)，1.2研究意义(理论价值、实践意义)，1.3研究目标(3个具体目标)。要求学术化表达，逻辑清晰，字数800-1000字。`;
+        break;
+      case 'method':
+        prompt = `请撰写研究方法与数据来源章节。包含：2.1研究方法(遗传算法、神经网络、SHAP分析等)，2.2数据来源与样本(${ipCount}个IP项目，${indicatorCount}项指标)，2.3技术路线。要求专业术语准确，方法论述清晰，字数700-900字。`;
+        break;
+      case 'analysis_intro':
+        prompt = `请撰写"3.评价体系构建与算法优化"和"4.实证分析结果"两个章节的引言部分。说明评价体系的构建逻辑、算法选择依据，以及实证分析的整体思路。要求学术严谨，逻辑清晰，字数500-600字。`;
+        break;
+      case 'branding_path':
+        prompt = `请撰写"品牌塑造路径设计"章节。基于前面的实证分析结果，提出少数民族体育IP的品牌塑造路径。包含：5.1三位一体塑造模式，5.2差异化发展策略，5.3协同发展机制。要求实用性强，可操作性强，字数1000-1200字。`;
+        break;
+      case 'policy_suggestions':
+        prompt = `请撰写"政策建议与实践指导"章节。包含：6.1政策支持建议(具体政策措施)，6.2运营实践指导(操作性建议)，6.3发展路径优化(实施方案)。要求针对性强，可行性高，字数800-1000字。`;
+        break;
+      case 'conclusion':
+        prompt = `请撰写"结论与展望"章节。包含：7.1主要结论(研究发现总结)，7.2研究贡献(理论贡献、实践贡献、方法贡献)，7.3研究展望(未来研究方向)。要求高度概括，前瞻性强，字数600-800字。`;
+        break;
+      default:
+        return '<p>内容生成中...</p>';
+    }
+    
+    // 使用统一的AI分析函数
+    const aiResponse = await performUnifiedAIAnalysis(prompt, true);
+    
+    // 学术化处理
+    return aiResponse
+      .replace(/<[^>]*>/g, '') // 移除HTML标签
+      .replace(/\*\*/g, '') // 移除粗体标记
+      .replace(/###?\s*/g, '') // 移除标题标记
+      .replace(/AI分析|人工智能|智能分析|机器学习模型/g, '计算模型')
+      .replace(/通过分析|可以看出|显示了/g, '分析结果表明')
+      .replace(/建议|推荐/g, '研究发现')
+      .split('\n')
+      .map(paragraph => paragraph.trim() ? `<p style="text-align: justify; line-height: 1.8; margin-bottom: 15px;">${paragraph.trim()}</p>` : '')
+      .join('')
+      .replace(/^<p[^>]*>(\d+\.\d*\s*[^<]+)<\/p>/gm, '<h3 style="font-size: 16px; color: #2c3e50; margin: 20px 0 10px 0;">$1</h3>')
+      .replace(/^<p[^>]*>([^<]*章节?[^<]*)<\/p>/gm, '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">$1</h2>');
+  } catch (error) {
+    console.error(`AI内容生成失败 for ${contentType}:`, error);
+    return getDefaultContent(contentType);
+  }
+};
+
+// 默认内容模板
+const getDefaultContent = (contentType: string): string => {
+  const defaults: Record<string, string> = {
+    'abstract': '<p style="text-align: justify; line-height: 1.8; margin-bottom: 15px;">本研究构建了少数民族体育IP的多维评价体系...</p>',
+    'background': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">1. 研究背景与意义</h2><p style="text-align: justify; line-height: 1.8;">研究背景生成中...</p>',
+    'method': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">2. 研究方法与数据来源</h2><p style="text-align: justify; line-height: 1.8;">研究方法生成中...</p>',
+    'analysis_intro': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">3. 评价体系构建与算法优化</h2><p style="text-align: justify; line-height: 1.8;">实证分析引言生成中...</p>',
+    'branding_path': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">5. 品牌塑造路径设计</h2><p style="text-align: justify; line-height: 1.8;">品牌塑造路径内容生成中...</p>',
+    'policy_suggestions': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">6. 政策建议与实践指导</h2><p style="text-align: justify; line-height: 1.8;">政策建议内容生成中...</p>',
+    'conclusion': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">7. 结论与展望</h2><p style="text-align: justify; line-height: 1.8;">结论内容生成中...</p>'
+  };
+  
+  return defaults[contentType] || '<p>内容生成中...</p>';
+};
+
+// 获取Canvas ID的辅助函数
+const getCanvasId = (chartId: string): string => {
+  switch (chartId) {
+    case 'fitness':
+      return 'fitnessChart';
+    case 'scores':
+      return 'scoreChart';
+    case 'radar':
+      return 'radarChart';
+    case 'neural':
+      return 'nnLossChart';
+    case 'importance':
+      return 'featureImportanceChart';
+    case 'shap':
+      return 'shapChart';
+    case 'pca':
+      return 'pcaChart';
+    default:
+      return `${chartId}Chart`;
+  }
+};
+
+// 渲染特定图表的辅助函数
+const renderSpecificChart = (chartId: string) => {
+  switch (chartId) {
+    case 'fitness':
+      renderFitnessChart();
+      break;
+    case 'scores':
+      renderScoreChart();
+      break;
+    case 'radar':
+      renderRadarChart();
+      break;
+    case 'neural':
+      renderNeuralNetworkCharts();
+      break;
+    case 'importance':
+      renderNeuralNetworkCharts();
+      break;
+    case 'shap':
+      renderSHAPChart();
+      break;
+    case 'pca':
+      renderPCAChart();
+      break;
+  }
+};
+
+const startNewChat = () => {
+  // 清空聊天历史
+  aiChatHistory.value = [];
+  // 添加欢迎消息
+  addChatMessage('ai', '💬 新对话已开始！我是您的AI分析助手，可以帮您深入分析图表数据。您可以：\n\n• 点击快捷按钮分析特定图表\n• 直接输入问题进行提问\n• 使用 Ctrl+数字键 快速分析对应图表\n\n有什么可以帮助您的吗？');
+  
+  // 清空输入框
+  userInput.value = '';
+  
+  // 记录日志
+  addLog('🆕 AI对话已重置，开始新的分析会话');
+};
 </script>
 
 <style scoped>
@@ -3603,7 +4210,7 @@ const getChineseChartTitle = (chartId: string): string => {
   transition: all 0.3s ease;
   z-index: 1000;
   display: flex;
-  flex-direction: column;
+    flex-direction: column;
 }
 
 .ai-minimized {
@@ -3692,7 +4299,7 @@ const getChineseChartTitle = (chartId: string): string => {
 .ai-chat-body {
   flex: 1;
   display: flex;
-  flex-direction: column;
+    flex-direction: column;
   overflow: hidden;
 }
 
