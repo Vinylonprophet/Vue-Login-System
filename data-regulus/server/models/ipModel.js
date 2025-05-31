@@ -76,6 +76,23 @@ class IPModel {
             throw new Error('专家必须是非空字符串');
         }
 
+        // 验证地址字段（可选）
+        if (ip.province !== undefined && typeof ip.province !== 'string') {
+            throw new Error('省份必须是字符串');
+        }
+
+        if (ip.city !== undefined && typeof ip.city !== 'string') {
+            throw new Error('城市必须是字符串');
+        }
+
+        if (ip.district !== undefined && typeof ip.district !== 'string') {
+            throw new Error('区县必须是字符串');
+        }
+
+        if (ip.full_address !== undefined && typeof ip.full_address !== 'string') {
+            throw new Error('完整地址必须是字符串');
+        }
+
         if (!ip.indicators) {
             throw new Error('IP必须包含indicators字段');
         }
@@ -156,6 +173,11 @@ class IPModel {
             group_name: ip.group_name,
             expert: ip.expert,
             indicators: this.normalizeIndicators(ip.indicators),
+            // 地址信息（可选）
+            province: ip.province || '',
+            city: ip.city || '',
+            district: ip.district || '',
+            full_address: ip.full_address || '',
             userId: userId,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()

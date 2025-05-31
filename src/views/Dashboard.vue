@@ -5,34 +5,39 @@
       <div class="header-left">
         <h1 class="main-title">少数民族民俗体育IP可视化大屏</h1>
         <div class="time-display">{{ currentTime }}</div>
-      </div>
-    </div>
-
+          </div>
+          </div>
+      
     <!-- 主体内容区 -->
     <div class="main-content">
       <!-- 左侧数据统计面板 -->
       <div class="left-panel">
         <div class="stat-card">
-          <div class="stat-icon">🏆</div>
+          <div class="stat-icon">🏗️</div>
           <div class="stat-content">
-            <div class="stat-number">{{ totalProjects }}</div>
-            <div class="stat-label">总项目数</div>
+            <div class="stat-value">{{ mapStats.totalProjects || totalProjects }}</div>
+            <div class="stat-label">体育项目</div>
           </div>
         </div>
-        
         <div class="stat-card">
-          <div class="stat-icon">🌟</div>
+          <div class="stat-icon">📍</div>
           <div class="stat-content">
-            <div class="stat-number">{{ totalRegions }}</div>
-            <div class="stat-label">覆盖地区</div>
+            <div class="stat-value">{{ mapStats.provinceCount || totalRegions }}</div>
+            <div class="stat-label">覆盖省份</div>
           </div>
         </div>
-        
         <div class="stat-card">
-          <div class="stat-icon">📈</div>
+          <div class="stat-icon">🎯</div>
           <div class="stat-content">
-            <div class="stat-number">{{ averageScore }}</div>
-            <div class="stat-label">平均分数</div>
+            <div class="stat-value">{{ mapStats.cityCount || 0 }}</div>
+            <div class="stat-label">覆盖城市</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⭐</div>
+          <div class="stat-content">
+            <div class="stat-value">{{ averageScore }}</div>
+            <div class="stat-label">平均评分</div>
           </div>
         </div>
 
@@ -46,9 +51,9 @@
               <div class="region-score">{{ region.score }}</div>
             </div>
           </div>
-        </div>
-      </div>
-
+            </div>
+          </div>
+          
       <!-- 中央地图区域 -->
       <div class="map-container">
         <div class="map-header">
@@ -61,17 +66,17 @@
               <span v-if="currentMapLevel === 'city'" class="breadcrumb-item" @click="loadProvinceMap(mapHistory[mapHistory.length - 1])">{{ mapHistory[mapHistory.length - 1] }}</span>
               <span v-if="currentMapLevel === 'city'" class="breadcrumb-separator">></span>
               <span v-if="currentMapLevel === 'city'" class="breadcrumb-item current">{{ currentMapName }}</span>
-            </div>
+    </div>
             <button v-if="mapHistory.length > 0" @click="goBackMap" class="back-btn">
               <span>← 返回</span>
-            </button>
-          </div>
+          </button>
         </div>
+            </div>
         <div id="chinaMap" class="china-map"></div>
         <div class="map-tip">
           {{ getMapTip() }}
+          </div>
         </div>
-      </div>
 
       <!-- 右侧详情面板 -->
       <div class="right-panel">
@@ -82,45 +87,46 @@
             <div v-for="item in realtimeData" :key="item.id" class="stream-item">
               <div class="stream-time">{{ item.time }}</div>
               <div class="stream-content">{{ item.content }}</div>
+              </div>
             </div>
-          </div>
-        </div>
+              </div>
 
         <!-- 项目类型分布 -->
         <div class="chart-card">
           <h3>项目类型分布</h3>
           <div id="typeChart" class="mini-chart"></div>
-        </div>
-
+            </div>
+          
         <!-- 月度趋势 -->
         <div class="chart-card">
           <h3>月度增长趋势</h3>
           <div id="trendChart" class="mini-chart"></div>
+          </div>
         </div>
       </div>
-    </div>
-
+          
     <!-- 底部状态栏 -->
     <div class="footer-section">
       <div class="footer-left">
         <span class="status-indicator online"></span>
         <span>系统运行正常</span>
-      </div>
+              </div>
       <div class="footer-right">
         <span>可视化大屏模式</span>
         <span style="margin-left: 20px;">最后更新: {{ lastUpdateTime }}</span>
-      </div>
-    </div>
-
+            </div>
+          </div>
+          
     <!-- 粒子背景效果 -->
     <div class="particle-background" ref="particleContainer"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
+import { ipApi } from '../utils/api'
 
 const router = useRouter()
 
@@ -135,6 +141,15 @@ const averageScore = ref(8.7)
 const currentMapLevel = ref('china') // 当前地图级别：china, province, city
 const currentMapName = ref('中国') // 当前地图名称
 const mapHistory = ref<string[]>([]) // 地图导航历史
+
+// 数据库IP地址数据
+const ipLocationData = ref<any[]>([])
+const mapStats = reactive({
+  totalProjects: 0,
+  provinceCount: 0,
+  cityCount: 0,
+  regionDistribution: {} as Record<string, number>
+})
 
 // 省份名称到拼音的映射
 const provinces: Record<string, string> = {
@@ -306,41 +321,181 @@ const initChinaMap = async () => {
   if (!mapElement) return
 
   try {
+    // 加载IP地址数据
+    const locationData = await loadIPLocationData()
+    
     // 加载中国地图数据
     const response = await fetch('/map/china.json')
     const mapData = await response.json()
     
     // 注册地图
     echarts.registerMap('china', mapData)
-    
+
     mapChart = echarts.init(mapElement)
 
-    // 提取省份数据
-    const chinaData = mapData.features.map((feature: any) => ({
-      name: feature.properties.name
-    }))
+    // 生成省份数据，包含项目数量
+    const chinaData = mapData.features.map((feature: any) => {
+      const provinceName = feature.properties.name
+      const projectCount = mapStats.regionDistribution[provinceName] || 0
+      
+      return {
+        name: provinceName,
+        value: projectCount,
+        itemStyle: {
+          areaColor: projectCount > 0 ? getHeatColor(projectCount) : '#f0f0f0'
+        }
+      }
+    })
 
-    // 重置状态
+    // 更新统计信息显示
+    totalProjects.value = mapStats.totalProjects
+    totalRegions.value = mapStats.provinceCount
+
+    // 重置地图状态
     currentMapLevel.value = 'china'
     currentMapName.value = '中国'
     mapHistory.value = []
 
-    // 渲染地图 - 中国地图居中
-    await renderMap('china', '中国', chinaData, 1.2, [105, 36])
+    const option = {
+      title: {
+        text: `中国民族体育项目分布图 (${mapStats.totalProjects}个项目)`,
+        left: 'center',
+        top: 20,
+        textStyle: {
+          color: '#fff',
+          fontSize: 18,
+          fontWeight: 'bold'
+        }
+      },
+      tooltip: {
+        trigger: 'item',
+        formatter: function (params: any) {
+          const data = params.data || {}
+          const projectCount = data.value || 0
+          
+          if (projectCount > 0) {
+            // 获取该省份的具体项目信息
+            const provinceProjects = locationData.filter(item => item.province === params.name)
+            let projectList = provinceProjects.slice(0, 3).map(p => `• ${p.name} (${p.expert})`).join('<br/>')
+            if (provinceProjects.length > 3) {
+              projectList += `<br/>还有 ${provinceProjects.length - 3} 个项目...`
+            }
+            
+            return `
+              <div style="padding: 8px;">
+                <div style="font-weight: bold; color: #333; margin-bottom: 8px;">
+                  ${params.name}
+                </div>
+                <div style="color: #666; margin-bottom: 6px;">
+                  项目数量: <span style="color: #1890ff; font-weight: bold;">${projectCount}</span>
+                </div>
+                <div style="font-size: 12px; color: #999; margin-bottom: 4px;">项目详情:</div>
+                <div style="font-size: 12px; color: #666;">
+                  ${projectList}
+                </div>
+              </div>
+            `
+          } else {
+            return `
+              <div style="padding: 8px;">
+                <div style="font-weight: bold; color: #333;">${params.name}</div>
+                <div style="color: #999; font-size: 12px;">暂无项目数据</div>
+              </div>
+            `
+          }
+        },
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderColor: '#ccc',
+        borderWidth: 1,
+        textStyle: {
+          color: '#333'
+        }
+      },
+      visualMap: {
+        min: 0,
+        max: Math.max(...Object.values(mapStats.regionDistribution), 5),
+        left: 'left',
+        top: 'bottom',
+        text: ['项目多', '项目少'],
+        textStyle: {
+          color: '#fff'
+        },
+        inRange: {
+          color: ['#e0f3ff', '#91d5ff', '#40a9ff', '#1890ff', '#0050b3']
+        },
+        show: mapStats.totalProjects > 0
+      },
+      series: [
+        {
+          name: '中国',
+          type: 'map',
+          map: 'china',
+          data: chinaData,
+          roam: true,
+          zoom: 1.1,
+          emphasis: {
+            itemStyle: {
+              areaColor: '#4dabf7',
+              borderColor: '#fff',
+              borderWidth: 2
+            },
+            label: {
+              show: true,
+              color: '#fff',
+              fontWeight: 'bold'
+            }
+          },
+          itemStyle: {
+            borderColor: 'rgba(255, 255, 255, 0.3)',
+            borderWidth: 1
+          },
+          label: {
+            show: false
+          }
+        }
+      ]
+    }
 
-    // 添加点击事件
+    mapChart.setOption(option)
+
+    // 绑定点击事件
+    mapChart.off('click')
     mapChart.on('click', (params) => {
       console.log('点击了:', params.name)
-      
-      if (params.name && params.name in provinces) {
-        // 点击省份，加载省份地图
+      if (params.name && provinces[params.name]) {
         loadProvinceMap(params.name)
       }
     })
 
+    // 窗口大小变化监听
+    const resizeHandler = () => {
+      mapChart?.resize()
+    }
+
+    window.addEventListener('resize', resizeHandler)
+    
+    console.log('🗺️ 中国地图初始化完成')
+    console.log('📊 地图数据统计:', {
+      总项目数: mapStats.totalProjects,
+      覆盖省份: mapStats.provinceCount,
+      分布情况: mapStats.regionDistribution
+    })
+
   } catch (error) {
-    console.error('加载地图数据失败:', error)
+    console.error('初始化中国地图失败:', error)
   }
+}
+
+// 根据项目数量生成热力图颜色
+const getHeatColor = (count: number) => {
+  const maxCount = Math.max(...Object.values(mapStats.regionDistribution), 1)
+  const ratio = count / maxCount
+  
+  if (ratio > 0.8) return '#0050b3'
+  if (ratio > 0.6) return '#1890ff'
+  if (ratio > 0.4) return '#40a9ff'
+  if (ratio > 0.2) return '#91d5ff'
+  return '#e0f3ff'
 }
 
 // 加载省份地图
@@ -413,12 +568,12 @@ const loadProvinceMap = async (provinceName: string) => {
       if (specialRegions.includes(provinceName)) {
         console.log('直辖市，返回全国地图')
         initChinaMap()
-      } else {
+        } else {
         // 尝试加载城市级地图
         if (params.name && params.name in cityMap) {
           console.log('找到城市映射，加载城市地图')
           loadCityMap(params.name, provinceName)
-        } else {
+      } else {
           console.log(`${provinceName} - ${params.name} 暂无详细地图数据`)
           console.log('尝试查找相似名称:')
           Object.keys(cityMap).forEach(city => {
@@ -493,7 +648,7 @@ const loadCityMapping = async () => {
       `
       fullCityMap = new Function(wrappedCode)()
       console.log('🎯 方法1成功: 直接执行JS，获得', Object.keys(fullCityMap || {}).length, '个城市')
-    } catch (error) {
+          } catch (error) {
       console.log('❌ 方法1失败:', (error as Error).message)
     }
     
@@ -526,7 +681,7 @@ const loadCityMapping = async () => {
           fullCityMap = JSON.parse(jsonStr)
           console.log('🎯 方法3成功: JSON解析，获得', Object.keys(fullCityMap || {}).length, '个城市')
         }
-      } catch (error) {
+  } catch (error) {
         console.log('❌ 方法3失败:', (error as Error).message)
       }
     }
@@ -539,7 +694,7 @@ const loadCityMapping = async () => {
       console.log('  - 西藏:', Object.keys(cityMap).filter(city => city.includes('拉萨') || city.includes('昌都')))
       console.log('  - 江苏:', Object.keys(cityMap).filter(city => city.includes('南京') || city.includes('苏州')))
       console.log('  - 广东:', Object.keys(cityMap).filter(city => city.includes('广州') || city.includes('深圳')))
-    } else {
+              } else {
       console.log('⚠️ 无法加载完整映射，使用备用映射')
     }
     
@@ -652,6 +807,55 @@ const loadCityMap = async (cityName: string, provinceName: string) => {
     console.error('加载城市地图失败:', error)
     // 显示错误提示给用户
     alert(`无法加载 ${cityName} 的详细地图数据：${error}`)
+  }
+}
+
+// 加载IP地址数据
+const loadIPLocationData = async () => {
+  try {
+    console.log('🗂️ 加载IP地址数据...')
+    const response = await ipApi.getAllIPs()
+    
+    if (response.data && Array.isArray(response.data)) {
+      // 过滤有地址信息的IP
+      const ipsWithLocation = response.data
+        .filter((ip: any) => ip.province && ip.city)
+        .map((ip: any) => ({
+          name: ip.project_name,
+          expert: ip.expert,
+          group: ip.group_name,
+          province: ip.province,
+          city: ip.city,
+          district: ip.district || '',
+          fullAddress: ip.full_address || `${ip.province} ${ip.city}`,
+          value: 1 // 每个项目计为1个点
+        }))
+      
+      ipLocationData.value = ipsWithLocation
+      
+      // 统计数据
+      mapStats.totalProjects = ipsWithLocation.length
+      mapStats.provinceCount = new Set(ipsWithLocation.map(item => item.province)).size
+      mapStats.cityCount = new Set(ipsWithLocation.map(item => item.city)).size
+      
+      // 省份分布统计
+      mapStats.regionDistribution = {}
+      ipsWithLocation.forEach(item => {
+        mapStats.regionDistribution[item.province] = (mapStats.regionDistribution[item.province] || 0) + 1
+      })
+      
+      console.log('✅ IP地址数据加载完成')
+      console.log('📊 统计信息:', mapStats)
+      console.log('📍 项目分布:', ipLocationData.value.slice(0, 5), '...')
+      
+      return ipsWithLocation
+    } else {
+      console.log('⚠️ 暂无IP地址数据')
+      return []
+    }
+  } catch (error) {
+    console.error('❌ 加载IP地址数据失败:', error)
+    return []
   }
 }
 
@@ -810,10 +1014,10 @@ onMounted(async () => {
   await loadCityMapping()
   console.log('城市映射加载完成，当前城市数量:', Object.keys(cityMap).length)
   
-  // 初始化图表
-  setTimeout(() => {
+  // 加载IP地址数据并初始化图表
+  setTimeout(async () => {
     console.log('开始初始化图表...')
-    initChinaMap()
+    await initChinaMap() // 这个函数内部会加载IP数据
     initTypeChart()
     initTrendChart()
     createParticles()
@@ -963,7 +1167,7 @@ const getMapTip = () => {
   border-radius: 50%;
 }
 
-.stat-number {
+.stat-value {
   font-size: 24px;
   font-weight: bold;
   color: #00ff88;
@@ -998,7 +1202,7 @@ const getMapTip = () => {
 .ranking-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+    gap: 10px;
   padding: 8px;
   border-radius: 6px;
   background: rgba(0, 212, 255, 0.1);
@@ -1037,7 +1241,7 @@ const getMapTip = () => {
 /* 中央地图区域 */
 .map-container {
   display: flex;
-  flex-direction: column;
+    flex-direction: column;
   background: rgba(0, 32, 64, 0.6);
   border: 1px solid rgba(0, 212, 255, 0.3);
   border-radius: 12px;
@@ -1142,7 +1346,7 @@ const getMapTip = () => {
 }
 
 .stream-content {
-  font-size: 13px;
+    font-size: 13px;
   color: #ccc;
   margin-top: 2px;
 }
@@ -1217,7 +1421,7 @@ const getMapTip = () => {
   .header-section {
     flex-direction: column;
     gap: 15px;
-    align-items: center;
+  align-items: center;
     text-align: center;
   }
   
@@ -1245,4 +1449,6 @@ const getMapTip = () => {
     font-size: 20px;
   }
 }
-</style>
+</style> 
+
+

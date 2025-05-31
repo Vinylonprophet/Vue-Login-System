@@ -131,7 +131,30 @@
                 <label>专家:</label>
                 <input v-model="ipForm.expert" type="text" placeholder="请输入专家姓名" />
               </div>
+              <div class="form-group address-group">
+                <label>所在地址:</label>
+                <el-cascader
+                  v-model="ipForm.addressArray"
+                  :options="areaData"
+                  :props="cascaderProps"
+                  placeholder="请选择省市区"
+                  clearable
+                  class="address-cascader"
+                  @change="onAddressChange"
+                />
+              </div>
             </div>
+            
+            <!-- 地址显示 -->
+            <!-- <div class="form-row" v-if="fullAddress">
+              <div class="form-group full-width">
+                <label>完整地址:</label>
+                <div class="address-display">
+                  <span class="address-text">{{ fullAddress }}</span>
+                  <button @click="clearAddress" class="btn-clear-address" type="button">清空</button>
+                </div>
+              </div>
+            </div> -->
           </div>
 
           <!-- 指标数据录入 -->
@@ -233,10 +256,23 @@
 import { ref, reactive, onMounted, nextTick, computed } from 'vue';
 import { ipApi, type IP, type IndicatorStructure } from '../utils/api';
 import { toast } from '../utils/toast';
+// 导入中国地址数据
+// @ts-ignore
+import chinaAreaData from 'china-area-data';
 
 // IP评估相关接口扩展
 interface IPWithScore extends IP {
   score?: number;
+  province?: string;
+  city?: string;
+  district?: string;
+}
+
+// 地址选择器数据接口
+interface AreaOption {
+  value: string;
+  label: string;
+  children?: AreaOption[];
 }
 
 // 响应式数据
@@ -285,8 +321,93 @@ const showExpertPanel = ref(false); // 多专家评分面板
 const ipForm = reactive({
   project_name: '',
   group_name: '',
-  expert: ''
+  expert: '',
+  addressArray: [] as string[],
+  province: '',
+  city: '',
+  district: ''
 });
+
+// 地址数据配置
+const areaData = ref<AreaOption[]>([]);
+const cascaderProps = {
+  expandTrigger: 'hover' as const,
+  value: 'value',
+  label: 'label',
+  children: 'children'
+};
+
+// 转换中国地址数据为层级结构
+const transformAreaData = () => {
+  const result: AreaOption[] = [];
+  
+  // 获取省级数据
+  const provinces = chinaAreaData['86'] as Record<string, string>;
+  
+  for (const [provinceCode, provinceName] of Object.entries(provinces)) {
+    const provinceOption: AreaOption = {
+      value: provinceName as string,
+      label: provinceName as string,
+      children: []
+    };
+    
+    // 获取市级数据
+    const cities = chinaAreaData[provinceCode] as Record<string, string>;
+    if (cities) {
+      for (const [cityCode, cityName] of Object.entries(cities)) {
+        const cityOption: AreaOption = {
+          value: cityName as string,
+          label: cityName as string,
+          children: []
+        };
+        
+        // 获取区县级数据
+        const districts = chinaAreaData[cityCode] as Record<string, string>;
+        if (districts) {
+          for (const [districtCode, districtName] of Object.entries(districts)) {
+            cityOption.children!.push({
+              value: districtName as string,
+              label: districtName as string
+            });
+          }
+        }
+        
+        provinceOption.children!.push(cityOption);
+      }
+    }
+    
+    result.push(provinceOption);
+  }
+  
+  return result;
+};
+
+// 地址相关数据
+const availableProvinces = ref<string[]>([
+  '北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', 
+  '黑龙江', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南', 
+  '湖北', '湖南', '广东', '海南', '四川', '贵州', '云南', '陕西', 
+  '甘肃', '青海', '新疆', '广西', '内蒙古', '宁夏', '西藏', '香港', '澳门'
+]);
+
+const availableCities = ref<string[]>([]);
+const availableDistricts = ref<string[]>([]);
+
+// 省市区数据映射
+const provinceToCity: Record<string, string[]> = {
+  '西藏': ['拉萨市', '昌都市', '山南市', '日喀则市', '那曲市', '阿里地区', '林芝市'],
+  '江苏': ['南京市', '无锡市', '徐州市', '常州市', '苏州市', '南通市', '连云港市', '淮安市', '盐城市', '扬州市', '镇江市', '泰州市', '宿迁市'],
+  '广东': ['广州市', '深圳市', '珠海市', '汕头市', '佛山市', '韶关市', '湛江市', '肇庆市', '江门市', '茂名市', '惠州市', '梅州市', '汕尾市', '河源市', '阳江市', '清远市', '东莞市', '中山市', '潮州市', '揭阳市', '云浮市'],
+  '北京': ['东城区', '西城区', '朝阳区', '丰台区', '石景山区', '海淀区', '门头沟区', '房山区', '通州区', '顺义区', '昌平区', '大兴区', '怀柔区', '平谷区', '密云区', '延庆区'],
+  '上海': ['黄浦区', '徐汇区', '长宁区', '静安区', '普陀区', '虹口区', '杨浦区', '闵行区', '宝山区', '嘉定区', '浦东新区', '金山区', '松江区', '青浦区', '奉贤区', '崇明区']
+};
+
+const cityToDistrict: Record<string, string[]> = {
+  '拉萨市': ['城关区', '堆龙德庆区', '达孜区', '林周县', '当雄县', '尼木县', '曲水县', '墨竹工卡县'],
+  '南京市': ['玄武区', '秦淮区', '建邺区', '鼓楼区', '浦口区', '栖霞区', '雨花台区', '江宁区', '六合区', '溧水区', '高淳区'],
+  '苏州市': ['虎丘区', '吴中区', '相城区', '姑苏区', '吴江区', '常熟市', '张家港市', '昆山市', '太仓市'],
+  '广州市': ['荔湾区', '越秀区', '海珠区', '天河区', '白云区', '黄埔区', '番禺区', '花都区', '南沙区', '从化区', '增城区']
+};
 
 // 多专家评分相关状态
 const selectedIPForExperts = ref<{ project_name: string; group_name: string } | null>(null);
@@ -340,6 +461,16 @@ const saveButtonClass = computed(() => {
 
 // 生命周期
 onMounted(async () => {
+  console.log('🗺️ 初始化地址数据...');
+  try {
+    areaData.value = transformAreaData();
+    console.log('✅ 地址数据加载成功，省份数量:', areaData.value.length);
+    console.log('📍 前5个省份:', areaData.value.slice(0, 5).map(p => p.label));
+  } catch (error) {
+    console.error('❌ 地址数据加载失败:', error);
+    toast.fail('地址数据加载失败');
+  }
+  
   await loadInitialData();
 });
 
@@ -440,6 +571,10 @@ const saveIP = async () => {
       project_name: ipForm.project_name.trim(),
       group_name: ipForm.group_name.trim(),
       expert: ipForm.expert.trim(),
+      province: ipForm.addressArray[0] || '',
+      city: ipForm.addressArray[1] || '',
+      district: ipForm.addressArray[2] || '',
+      full_address: fullAddress.value,
       indicators
     };
     
@@ -450,13 +585,13 @@ const saveIP = async () => {
       // 真正的编辑模式：更新现有IP
       loadingText.value = '更新IP中...';
       await ipApi.updateIP(editingIPId.value!, ipData);
-      addLog(`已更新IP: ${ipData.project_name} (组别: ${ipData.group_name}, 专家: ${ipData.expert})`);
+      addLog(`已更新IP: ${ipData.project_name} (组别: ${ipData.group_name}, 专家: ${ipData.expert}, 地址: ${ipData.full_address})`);
       toast.success(`IP "${ipData.project_name}" 更新成功！`);
     } else {
       // 创建模式：添加新IP
       loadingText.value = '保存IP中...';
       await ipApi.addIP(ipData);
-      addLog(`已添加IP: ${ipData.project_name} (组别: ${ipData.group_name}, 专家: ${ipData.expert})`);
+      addLog(`已添加IP: ${ipData.project_name} (组别: ${ipData.group_name}, 专家: ${ipData.expert}, 地址: ${ipData.full_address})`);
       toast.success(`IP "${ipData.project_name}" 保存成功！`);
     }
     
@@ -485,6 +620,10 @@ const selectIP = (ip: IP) => {
   ipForm.group_name = ip.group_name;
   ipForm.expert = ip.expert;
   
+  // 更新地址信息（如果存在）
+  const selectedIPData = ip as IPWithScore;
+  ipForm.addressArray = [(selectedIPData.province || ''), (selectedIPData.city || ''), (selectedIPData.district || '')].filter(Boolean);
+  
   // 清空现有的指标值
   initializeIndicatorValues();
   
@@ -506,18 +645,8 @@ const selectIP = (ip: IP) => {
     });
   }
   
-  addLog(`选择IP: ${ip.project_name} (专家: ${ip.expert})`);
-};
-
-// 辅助函数：将中文指标名转换为属性名
-const getPropertyNameForIndicator = (indicator: string): string | null => {
-  // 使用从后端获取的映射关系
-  if (indicatorStructure.value.indicatorPropertyMap) {
-    return indicatorStructure.value.indicatorPropertyMap[indicator] || null;
-  }
-  
-  // 如果映射关系未加载，返回null
-  return null;
+  const addressInfo = fullAddress.value ? `, 地址: ${fullAddress.value}` : '';
+  addLog(`选择IP: ${ip.project_name} (专家: ${ip.expert}${addressInfo})`);
 };
 
 const deleteIP = async (ip: IP) => {
@@ -554,6 +683,10 @@ const clearForm = () => {
   ipForm.project_name = '';
   ipForm.group_name = '';
   ipForm.expert = '';
+  ipForm.addressArray = [];
+  ipForm.province = '';
+  ipForm.city = '';
+  ipForm.district = '';
   editMode.value = false;
   editingIPId.value = null;
   initializeIndicatorValues();
@@ -565,15 +698,36 @@ const fillRandomData = () => {
   const projectName = ['赛马', '赛骆驼', '足球', '篮球', '乒乓球', '街舞'];
   const experts = ['张教授', '李专家', '王研究员', '陈博士', '刘教授'];
   
+  // 随机地址数据
+  const addressOptions = [
+    ['北京市', '东城区', '东华门街道'],
+    ['上海市', '黄浦区', '南京东路街道'],
+    ['广东省', '广州市', '越秀区'],
+    ['江苏省', '南京市', '玄武区'],
+    ['浙江省', '杭州市', '西湖区'],
+    ['四川省', '成都市', '锦江区'],
+    ['西藏自治区', '拉萨市', '城关区'],
+    ['新疆维吾尔自治区', '乌鲁木齐市', '天山区'],
+    ['内蒙古自治区', '呼和浩特市', '新城区'],
+    ['云南省', '昆明市', '五华区']
+  ];
+  
   ipForm.project_name = projectName[Math.floor(Math.random() * projectName.length)];
   ipForm.group_name = `测试组_${Math.floor(Math.random() * 5) + 1}`;
   ipForm.expert = experts[Math.floor(Math.random() * experts.length)];
+  
+  // 随机选择地址
+  const randomAddress = addressOptions[Math.floor(Math.random() * addressOptions.length)];
+  ipForm.addressArray = [...randomAddress];
+  ipForm.province = randomAddress[0];
+  ipForm.city = randomAddress[1];
+  ipForm.district = randomAddress[2];
   
   filteredThirdIndicators.value.forEach(indicator => {
     indicatorValues.value[indicator] = Math.floor(Math.random() * 100);
   });
   
-  addLog('已随机填充数据');
+  addLog(`已随机填充数据，地址: ${fullAddress.value}`);
 };
 
 const generateTestData = async () => {
@@ -885,6 +1039,44 @@ const getExpertIndicatorScore = (expert: IP, indicator: string): string => {
     return expert.indicators[propertyName].toFixed(1);
   }
   return '0.0';
+};
+
+// 地址相关方法
+const onAddressChange = (value: string[]) => {
+  if (value && value.length > 0) {
+    ipForm.addressArray = value;
+    ipForm.province = value[0] || '';
+    ipForm.city = value[1] || '';
+    ipForm.district = value[2] || '';
+    addLog(`选择地址: ${fullAddress.value}`);
+  } else {
+    clearAddress();
+  }
+};
+
+const clearAddress = () => {
+  ipForm.addressArray = [];
+  ipForm.province = '';
+  ipForm.city = '';
+  ipForm.district = '';
+  addLog('地址已清空');
+};
+
+// 计算完整地址
+const fullAddress = computed(() => {
+  const parts = [ipForm.province, ipForm.city, ipForm.district].filter(part => part && part.trim());
+  return parts.length > 0 ? parts.join(' ') : '';
+});
+
+// 辅助函数：将中文指标名转换为属性名
+const getPropertyNameForIndicator = (indicator: string): string | null => {
+  // 使用从后端获取的映射关系
+  if (indicatorStructure.value.indicatorPropertyMap) {
+    return indicatorStructure.value.indicatorPropertyMap[indicator] || null;
+  }
+  
+  // 如果映射关系未加载，返回null
+  return null;
 };
 </script>
 
@@ -1242,20 +1434,19 @@ const getExpertIndicatorScore = (expert: IP, indicator: string): string => {
 
 .data-entry-panel {
   background: white;
+  border: 1px solid #e1e5e9;
   border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  height: 800px;
-  min-width: 0; /* 允许收缩 */
-  display: flex;
-  flex-direction: column;
+  margin-left: 20px;
+  min-width: 400px;
+  max-height: 800px;
+  overflow-y: auto;
 }
 
 .data-entry-panel h3 {
+  margin-top: 0;
   color: #2c3e50;
-  font-size: 18px;
-  font-weight: 600;
-  text-align: center;
+  border-bottom: 2px solid #3498db;
   padding-bottom: 10px;
 }
 
@@ -1693,15 +1884,15 @@ const getExpertIndicatorScore = (expert: IP, indicator: string): string => {
 }
 
 .form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  display: flex;
   gap: 15px;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
 }
 
 .form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex: 1;
+  min-width: 200px;
 }
 
 .form-group label {
@@ -2105,5 +2296,299 @@ const getExpertIndicatorScore = (expert: IP, indicator: string): string => {
   color: #6c757d;
   text-align: center;
   font-style: italic;
+}
+
+/* 地址选择特定样式 */
+.address-row {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border: 1px solid #e1e5e9;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 15px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.address-row:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.address-row .form-group {
+  margin-bottom: 0;
+}
+
+.address-row label {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.address-row label::before {
+  content: "📍";
+  margin-right: 6px;
+  font-size: 16px;
+}
+
+/* Element Plus Cascader 自定义样式 */
+.ip-basic-info :deep(.el-cascader) {
+  width: 100%;
+}
+
+.ip-basic-info :deep(.el-cascader .el-input) {
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+  transition: all 0.3s ease;
+}
+
+.ip-basic-info :deep(.el-cascader .el-input:hover) {
+  border-color: #3182ce;
+}
+
+.ip-basic-info :deep(.el-cascader .el-input.is-focus) {
+  border-color: #3182ce;
+  box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+}
+
+.ip-basic-info :deep(.el-cascader .el-input__inner) {
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  background: #ffffff;
+  border: none;
+}
+
+.ip-basic-info :deep(.el-cascader .el-input__inner::placeholder) {
+  color: #a0aec0;
+  font-style: italic;
+}
+
+.ip-basic-info :deep(.el-cascader .el-input__suffix) {
+  right: 12px;
+}
+
+.ip-basic-info :deep(.el-cascader .el-icon) {
+  color: #718096;
+  transition: color 0.3s ease;
+}
+
+.ip-basic-info :deep(.el-cascader:hover .el-icon) {
+  color: #3182ce;
+}
+
+/* Cascader 下拉面板样式 */
+.ip-basic-info :deep(.el-cascader-panel) {
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.ip-basic-info :deep(.el-cascader-menu) {
+  border-right: 1px solid #f1f5f9;
+}
+
+.ip-basic-info :deep(.el-cascader-menu:last-child) {
+  border-right: none;
+}
+
+.ip-basic-info :deep(.el-cascader-node) {
+  padding: 10px 16px;
+  transition: all 0.2s ease;
+  border-radius: 6px;
+  margin: 2px 8px;
+}
+
+.ip-basic-info :deep(.el-cascader-node:hover) {
+  background: linear-gradient(135deg, #ebf4ff 0%, #dbeafe 100%);
+  color: #3182ce;
+}
+
+.ip-basic-info :deep(.el-cascader-node.is-active) {
+  background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
+  color: white;
+  font-weight: 500;
+}
+
+.ip-basic-info :deep(.el-cascader-node__label) {
+  font-size: 14px;
+}
+
+/* 地址显示区域样式 */
+.address-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%);
+  border: 2px solid #38a169;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-top: 5px;
+  transition: all 0.3s ease;
+}
+
+.address-display:hover {
+  box-shadow: 0 4px 12px rgba(56, 161, 105, 0.15);
+  transform: translateY(-1px);
+}
+
+.address-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #22543d;
+  background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: flex;
+  align-items: center;
+}
+
+.address-text::before {
+  content: "🏠";
+  margin-right: 8px;
+  -webkit-text-fill-color: initial;
+}
+
+.btn-clear-address {
+  background: linear-gradient(135deg, #fed7e2 0%, #fbb6ce 100%);
+  border: 1px solid #f687b3;
+  color: #b83280;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.btn-clear-address:hover {
+  background: linear-gradient(135deg, #fbb6ce 0%, #f687b3 100%);
+  color: #97266d;
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(184, 50, 128, 0.2);
+}
+
+.btn-clear-address:active {
+  transform: scale(0.98);
+}
+
+/* 改进现有的表单组样式 */
+.ip-basic-info .form-group.full-width {
+  flex: 100%;
+  margin-bottom: 15px;
+}
+
+.ip-basic-info .form-group.full-width label {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .address-row {
+    padding: 15px;
+    margin: 10px 0;
+  }
+  
+  .address-display {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .btn-clear-address {
+    align-self: flex-end;
+  }
+  
+  .ip-basic-info :deep(.el-cascader .el-input__inner) {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+}
+
+/* 加载状态样式 */
+.address-row.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.address-row.loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 2px solid #e2e8f0;
+  border-top: 2px solid #3182ce;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 地址选择器统一样式 - 替换原有复杂样式 */
+.ip-basic-info :deep(.address-cascader) {
+  width: 100%;
+}
+
+.ip-basic-info :deep(.address-cascader .el-input) {
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  transition: border-color 0.3s ease;
+}
+
+.ip-basic-info :deep(.address-cascader .el-input:hover) {
+  border-color: #3498db;
+}
+
+.ip-basic-info :deep(.address-cascader .el-input.is-focus) {
+  border-color: #3498db;
+  box-shadow: none;
+}
+
+.ip-basic-info :deep(.address-cascader .el-input__inner) {
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  background: #ffffff;
+  border: none;
+  height: auto;
+}
+
+.ip-basic-info :deep(.address-cascader .el-input__inner::placeholder) {
+  color: #999;
+}
+
+.ip-basic-info :deep(.address-cascader .el-input__suffix) {
+  right: 12px;
+}
+
+.ip-basic-info :deep(.address-cascader .el-icon) {
+  color: #999;
+}
+
+/* 地址选择器占据两格宽度 */
+.ip-basic-info .form-group.address-group {
+  flex: 2;
+  min-width: 400px;
+}
+
+.ip-basic-info .form-group {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 </style> 
