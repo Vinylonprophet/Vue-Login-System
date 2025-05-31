@@ -11,6 +11,25 @@
             </svg>
             <span>全面分析</span>
           </button>
+          <button @click="exportToPDF" class="header-btn export-btn" :disabled="!hasAnalysisResults">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 2v6h6"/>
+              <path d="M16 13H8"/>
+              <path d="M16 17H8"/>
+              <path d="M10 9H8"/>
+            </svg>
+            <span>导出PDF</span>
+          </button>
+          <button @click="exportToExcel" class="header-btn excel-btn" :disabled="!hasAnalysisResults">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 2v6h6"/>
+              <path d="M9 15h6"/>
+              <path d="M12 9v6"/>
+            </svg>
+            <span>导出Excel</span>
+          </button>
           </div>
           </div>
       
@@ -299,6 +318,9 @@
 import { ref, reactive, onMounted, nextTick, computed } from 'vue';
 import { ipApi, pythonMLApi, type IP, type EvaluationResult, type IndicatorStructure } from '../utils/api';
 import { toast } from '../utils/toast';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 import {
   Chart,
   CategoryScale,
@@ -445,6 +467,15 @@ const chartTabs = computed(() => [
     count: advancedClusterResult.value?.clustering_results?.length || 0
   }
 ]);
+
+// 添加计算属性：检查是否有分析结果
+const hasAnalysisResults = computed(() => {
+  return evaluationResult.value !== null || 
+         neuralNetworkResult.value !== null || 
+         shapResult.value !== null || 
+         pcaResult.value !== null || 
+         advancedClusterImage.value !== '';
+});
 
 // 生命周期
 onMounted(async () => {
@@ -1382,6 +1413,522 @@ const updateFilteredIPs = () => {
   }
   addLog(`筛选组别: ${ipGroupFilter.value}, 显示${filteredIPs.value.length}个IP`);
 };
+
+// PDF导出功能
+const exportToPDF = async () => {
+  if (!hasAnalysisResults.value) {
+    toast.warning('请先进行全面分析后再导出PDF');
+    return;
+  }
+  
+  try {
+    loading.value = true;
+    loadingText.value = '准备导出PDF...';
+    
+    // 保存当前激活的图表
+    const originalActiveChart = activeChart.value;
+    
+    // 计算有多少个图表需要导出
+    const charts = [
+      { id: 'fitness', title: 'Genetic Algorithm Fitness Evolution', condition: evaluationResult.value?.fitnessHistory && evaluationResult.value.fitnessHistory.length > 0 },
+      { id: 'scores', title: 'IP Score Distribution', condition: evaluationResult.value?.evaluation && evaluationResult.value.evaluation.length > 0 },
+      { id: 'radar', title: 'Key Indicator Weights', condition: evaluationResult.value?.weights && evaluationResult.value.weights.length > 0 },
+      { id: 'neural', title: 'Neural Network Training Loss', condition: neuralNetworkResult.value !== null },
+      { id: 'importance', title: 'Feature Importance Analysis', condition: neuralNetworkResult.value?.feature_importance && neuralNetworkResult.value.feature_importance.length > 0 },
+      { id: 'shap', title: 'SHAP Feature Contribution', condition: shapResult.value !== null },
+      { id: 'pca', title: 'PCA Dimensionality Reduction', condition: pcaResult.value !== null },
+      { id: 'cluster', title: 'Advanced Clustering Analysis', condition: advancedClusterImage.value !== '' }
+    ];
+    
+    const validCharts = charts.filter(c => c.condition);
+    
+    addLog(`🚀 开始PDF导出流程`);
+    addLog(`📊 发现 ${validCharts.length} 个可导出图表`);
+    addLog(`⏰ 预计需要 ${Math.ceil(validCharts.length * 2.5)} 秒完成`);
+    addLog(`💡 PDF将使用英文标题以确保最佳兼容性`);
+    addLog(`⚡ 正在处理复杂图表，请耐心等待...`);
+    
+    // 创建PDF实例
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+    
+    // PDF页面设置
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 20;
+    const contentWidth = pageWidth - 2 * margin;
+    let currentY = margin;
+    
+    // 添加标题 - 使用纯英文避免中文字体问题
+    pdf.setFontSize(20);
+    pdf.setFont('helvetica', 'bold');
+    const title = 'Ethnic Sports IP Analysis Report';
+    const titleWidth = pdf.getTextWidth(title);
+    pdf.text(title, (pageWidth - titleWidth) / 2, currentY);
+    currentY += 15;
+    
+    // 添加生成时间
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    const timestamp = `Generated: ${new Date().toLocaleString('en-US')}`;
+    pdf.text(timestamp, margin, currentY);
+    currentY += 10;
+    
+    // 添加分析概况
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Analysis Summary', margin, currentY);
+    currentY += 8;
+    
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Total IPs Analyzed: ${selectedIPs.value.length}`, margin, currentY);
+    currentY += 6;
+    pdf.text(`Indicators Used: ${filteredThirdIndicators.value.length}`, margin, currentY);
+    currentY += 6;
+    pdf.text(`Generated by: Ethnic Sports IP Evaluation System`, margin, currentY);
+    currentY += 10;
+    
+    // 添加详细IP数据表格
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Detailed IP Analysis Data', margin, currentY);
+    currentY += 6;
+    
+    // 添加说明
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'italic');
+    pdf.text('(Using English identifiers to avoid character encoding issues)', margin, currentY);
+    currentY += 8;
+    
+    // 表格标题行
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'bold');
+    const colWidths = [35, 35, 25, 30, 45]; // 列宽度
+    const headers = ['Project Name', 'Expert/Group', 'Group', 'Final Score', 'Top 3 Indicators'];
+    let colX = margin;
+    
+    headers.forEach((header, index) => {
+      pdf.text(header, colX, currentY);
+      colX += colWidths[index];
+    });
+    currentY += 6;
+    
+    // 添加分隔线
+    pdf.line(margin, currentY - 2, margin + colWidths.reduce((sum, w) => sum + w, 0), currentY - 2);
+    
+    // 获取选中IP的详细数据
+    const selectedIPData: any[] = [];
+    for (const ipId of selectedIPs.value) {
+      const ip = ips.value.find(item => item.id === ipId);
+      if (ip) {
+        selectedIPData.push(ip);
+      }
+    }
+    
+    // 表格数据行
+    pdf.setFont('helvetica', 'normal');
+    selectedIPData.slice(0, 15).forEach((ip: any, ipIndex: number) => { // 限制显示数量避免页面过长
+      if (currentY > pageHeight - 40) {
+        pdf.addPage();
+        currentY = margin;
+      }
+      
+      colX = margin;
+      
+      // 项目名称 (使用英文ID避免乱码)
+      const projectName = `Project_${ipIndex + 1}`;
+      pdf.text(projectName, colX, currentY);
+      colX += colWidths[0];
+      
+      // 专家/组别信息 (使用英文标识)
+      const expertInfo = ip._isGroup ? 'Multi-Expert' : `Expert_${ipIndex + 1}`;
+      pdf.text(expertInfo, colX, currentY);
+      colX += colWidths[1];
+      
+      // 组别 (使用英文标识)
+      const groupName = `Group_${(['A', 'B', 'C', 'D', 'E'])[ipIndex % 5]}`;
+      pdf.text(groupName, colX, currentY);
+      colX += colWidths[2];
+      
+      // 最终评分
+      let finalScore = 'N/A';
+      if (evaluationResult.value?.evaluation) {
+        const evalItem = evaluationResult.value.evaluation.find((item: any) => item.name === ip.project_name);
+        if (evalItem) {
+          finalScore = evalItem.score.toFixed(3);
+        }
+      }
+      pdf.text(finalScore, colX, currentY);
+      colX += colWidths[3];
+      
+      // 前3个指标值 (使用英文标识)
+      if (ip.indicators && typeof ip.indicators === 'object') {
+        const indicatorValues = Object.values(ip.indicators as Record<string, number>);
+        const topIndicators = indicatorValues
+          .map((value: any, index: number) => ({ value, index }))
+          .sort((a: any, b: any) => b.value - a.value)
+          .slice(0, 3)
+          .map((item: any) => `I${item.index + 1}:${item.value.toFixed(1)}`)
+          .join(' ');
+        const indicatorText = topIndicators.length > 20 ? topIndicators.substring(0, 20) + '...' : topIndicators;
+        pdf.text(indicatorText, colX, currentY);
+      } else {
+        pdf.text('No Data', colX, currentY);
+      }
+      
+      currentY += 5;
+    });
+    
+    currentY += 10;
+    
+    // 开始处理图表导出
+    let processedCharts = 0;
+    
+    for (const chart of validCharts) {
+      try {
+        processedCharts++;
+        loadingText.value = `导出图表 ${processedCharts}/${validCharts.length}: ${chart.title}`;
+        
+        let imageDataUrl: string | null = null;
+        
+        if (chart.id === 'cluster') {
+          const imgElement = document.querySelector('.ml-chart-image img') as HTMLImageElement;
+          if (imgElement && imgElement.src) {
+            imageDataUrl = imgElement.src;
+            addLog(`✅ 获取聚类图片: ${chart.title}`);
+          }
+        } else {
+          addLog(`🔄 准备导出图表 (${processedCharts}/${validCharts.length}): ${chart.title}`);
+          
+          activeChart.value = chart.id;
+          await nextTick();
+          
+          let waitTime = chart.id === 'shap' ? 3000 : chart.id === 'neural' || chart.id === 'importance' ? 2500 : 2000;
+          addLog(`⏳ 等待图表渲染 (${waitTime}ms): ${chart.title}`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          await nextTick();
+          
+          const canvasId = chart.id === 'importance' ? 'featureImportanceChart' : `${chart.id}Chart`;
+          const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
+          if (canvas) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const hasContent = imageData.data.some(value => value !== 0);
+              
+              if (hasContent) {
+                imageDataUrl = canvas.toDataURL('image/png', 1.0);
+                addLog(`✅ 成功获取图表数据: ${chart.title}`);
+              } else {
+                addLog(`⚠️ 图表内容为空: ${chart.title}`);
+              }
+            }
+          }
+        }
+        
+        if (imageDataUrl && imageDataUrl !== 'data:,') {
+          if (currentY + 80 > pageHeight - margin) {
+            pdf.addPage();
+            currentY = margin;
+          }
+          
+          pdf.setFontSize(12);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(chart.title, margin, currentY);
+          currentY += 8;
+          
+          const maxWidth = contentWidth;
+          const maxHeight = 70;
+          pdf.addImage(imageDataUrl, 'PNG', margin, currentY, maxWidth, maxHeight);
+          currentY += maxHeight + 10;
+          
+          // 添加简化的数据分析 (使用英文标识避免乱码)
+          pdf.setFontSize(8);
+          pdf.setFont('helvetica', 'normal');
+          if (chart.id === 'radar' && evaluationResult.value?.weights) {
+            pdf.text('Top Weights (English IDs):', margin, currentY);
+            currentY += 4;
+            const weights = evaluationResult.value.weights;
+            weights.slice(0, 5).forEach((weight: number, idx: number) => {
+              pdf.text(`${idx + 1}. Indicator_${idx + 1}: ${(weight * 100).toFixed(2)}%`, margin + 5, currentY);
+              currentY += 3;
+            });
+          } else if (chart.id === 'importance' && neuralNetworkResult.value?.feature_importance) {
+            pdf.text('Top Features (English IDs):', margin, currentY);
+            currentY += 4;
+            const importance = neuralNetworkResult.value.feature_importance;
+            importance.slice(0, 5).forEach((score: number, idx: number) => {
+              pdf.text(`${idx + 1}. Feature_${idx + 1}: ${score.toFixed(4)}`, margin + 5, currentY);
+              currentY += 3;
+            });
+          }
+          
+          currentY += 5;
+          addLog(`✅ 已添加图表到PDF: ${chart.title}`);
+        } else {
+          addLog(`⚠️ 跳过图表: ${chart.title} (无有效图像数据)`);
+        }
+      } catch (error) {
+        addLog(`❌ 处理图表失败: ${chart.title}`);
+      }
+    }
+    
+    // 恢复原来的激活图表
+    activeChart.value = originalActiveChart;
+    
+    // 添加映射表到最后一页
+    if (currentY + 60 > pageHeight - margin) {
+      pdf.addPage();
+      currentY = margin;
+    }
+    
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('English ID Mapping Table', margin, currentY);
+    currentY += 10;
+    
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    
+    // 项目映射
+    pdf.text('Project Mapping:', margin, currentY);
+    currentY += 4;
+    selectedIPData.slice(0, 10).forEach((ip: any, index: number) => {
+      const mapping = `Project_${index + 1} = ${ip.project_name || 'Unknown'}`;
+      if (mapping.length > 60) {
+        pdf.text(mapping.substring(0, 60) + '...', margin + 5, currentY);
+      } else {
+        pdf.text(mapping, margin + 5, currentY);
+      }
+      currentY += 3;
+    });
+    
+    currentY += 5;
+    
+    // 组别映射
+    pdf.text('Group Mapping:', margin, currentY);
+    currentY += 4;
+    const uniqueGroups = [...new Set(selectedIPData.map((ip: any) => ip.group_name))];
+    uniqueGroups.slice(0, 5).forEach((group: any, index: number) => {
+      const groupLetter = ['A', 'B', 'C', 'D', 'E'][index];
+      const mapping = `Group_${groupLetter} = ${group || 'Unknown'}`;
+      pdf.text(mapping, margin + 5, currentY);
+      currentY += 3;
+    });
+    
+    await nextTick();
+    
+    // 添加页脚
+    const pageCount = pdf.internal.pages.length - 1; // 减去空白页
+    for (let i = 1; i <= pageCount; i++) {
+      pdf.setPage(i);
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      const footerText = `Page ${i} of ${pageCount}`;
+      const footerWidth = pdf.getTextWidth(footerText);
+      pdf.text(footerText, (pageWidth - footerWidth) / 2, pageHeight - 10);
+    }
+    
+    // 生成文件名
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
+    const fileName = `IP-Analysis-Report_${dateStr}_${timeStr}.pdf`;
+    
+    // 保存PDF
+    pdf.save(fileName);
+    
+    addLog(`🎉 PDF导出成功: ${fileName} (包含 ${validCharts.length} 个图表)`);
+    addLog(`📄 PDF标题已优化为英文格式，避免乱码问题`);
+    toast.success(`PDF导出成功！包含 ${validCharts.length} 个图表，使用英文标题`);
+    
+  } catch (error) {
+    console.error('PDF导出失败:', error);
+    addLog(`❌ PDF导出失败: ${error}`);
+    toast.fail('PDF导出失败，请重试');
+  } finally {
+    loading.value = false;
+    loadingText.value = '';
+  }
+};
+
+// Excel导出功能
+const exportToExcel = async () => {
+  if (!hasAnalysisResults.value) {
+    toast.warning('请先进行全面分析后再导出Excel');
+    return;
+  }
+  
+  try {
+    loading.value = true;
+    loadingText.value = '准备导出Excel...';
+    
+    addLog('🚀 开始Excel导出流程');
+    addLog(`📊 导出分析的 ${selectedIPs.value.length} 个IP数据`);
+    
+    // 准备Excel数据
+    const excelData = [];
+    
+    // 获取中文指标名称
+    const chineseIndicatorNames = filteredThirdIndicators.value.length > 0 
+      ? filteredThirdIndicators.value 
+      : indicatorStructure.value.allThird || [];
+    
+    // 添加标题行
+    const headers = [
+      '项目名称', '专家', '组别', 
+      ...chineseIndicatorNames
+    ];
+    excelData.push(headers);
+    
+    // 处理每个选中的IP
+    for (const ipId of selectedIPs.value) {
+      const ip = ips.value.find(item => item.id === ipId);
+      if (!ip) continue;
+      
+      if (ip._isGroup) {
+        // 多专家聚合记录，获取每个专家的具体评分
+        try {
+          const expertsResponse = await ipApi.getExpertScoresByIP(ip.project_name, ip.group_name);
+          if (expertsResponse.data && expertsResponse.data.length > 0) {
+            const expertScores = expertsResponse.data;
+            
+            // 为每个专家添加一行数据
+            expertScores.forEach(expert => {
+              const row: any[] = [
+                ip.project_name || '',
+                expert.expert || '',
+                ip.group_name || ''
+              ];
+              
+              // 添加指标数据（使用中文名称对应的数值）
+              chineseIndicatorNames.forEach(chineseName => {
+                // 通过中文名称找到对应的属性名
+                const propertyName = indicatorStructure.value.indicatorPropertyMap?.[chineseName];
+                const value = expert.indicators && propertyName 
+                  ? expert.indicators[propertyName] || 0 
+                  : 0;
+                row.push(Number(value));
+              });
+              
+              excelData.push(row);
+            });
+            
+            // 添加平均值行
+            const avgRow: any[] = [
+              ip.project_name || '',
+              `${expertScores.length}位专家平均`,
+              ip.group_name || ''
+            ];
+            
+            // 计算平均值
+            chineseIndicatorNames.forEach(chineseName => {
+              const propertyName = indicatorStructure.value.indicatorPropertyMap?.[chineseName];
+              if (propertyName) {
+                const sum = expertScores.reduce((acc, expert) => {
+                  return acc + (expert.indicators[propertyName] || 0);
+                }, 0);
+                const avgValue = sum / expertScores.length;
+                avgRow.push(Number(avgValue.toFixed(2)));
+              } else {
+                avgRow.push(0);
+              }
+            });
+            
+            excelData.push(avgRow);
+            
+            // 添加空行分隔
+            excelData.push(Array(headers.length).fill(''));
+            
+          }
+        } catch (error) {
+          addLog(`⚠️ 获取IP "${ip.project_name}" 的专家数据失败`);
+        }
+      } else {
+        // 单一专家记录
+        const row: any[] = [
+          ip.project_name || '',
+          ip.expert || '',
+          ip.group_name || ''
+        ];
+        
+        // 添加指标数据
+        chineseIndicatorNames.forEach(chineseName => {
+          const propertyName = indicatorStructure.value.indicatorPropertyMap?.[chineseName];
+          const value = ip.indicators && propertyName 
+            ? ip.indicators[propertyName] || 0 
+            : 0;
+          row.push(Number(value));
+        });
+        
+        excelData.push(row);
+      }
+    }
+    
+    // 创建工作簿
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(excelData);
+    
+    // 设置列宽
+    const colWidths = [
+      {wch: 25}, // 项目名称
+      {wch: 15}, // 专家
+      {wch: 15}, // 组别
+      ...Array(chineseIndicatorNames.length).fill({wch: 12}) // 指标列
+    ];
+    ws['!cols'] = colWidths;
+    
+    // 添加工作表到工作簿
+    XLSX.utils.book_append_sheet(wb, ws, '分析数据详情');
+    
+    // 如果有分析结果，添加分析结果工作表
+    if (evaluationResult.value?.evaluation) {
+      const analysisData = [];
+      analysisData.push(['排名', '项目名称', '综合评分', '误差值']);
+      
+      evaluationResult.value.evaluation
+        .sort((a: any, b: any) => b.score - a.score)
+        .forEach((item: any, index: number) => {
+          analysisData.push([
+            index + 1,
+            item.name,
+            Number(item.score.toFixed(4)),
+            item.error ? Number(item.error.toFixed(4)) : 'N/A'
+          ]);
+        });
+      
+      const analysisWs = XLSX.utils.aoa_to_sheet(analysisData);
+      analysisWs['!cols'] = [{wch: 8}, {wch: 25}, {wch: 12}, {wch: 12}];
+      XLSX.utils.book_append_sheet(wb, analysisWs, '综合评分排名');
+    }
+    
+    // 生成文件名
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
+    const fileName = `IP-Analysis-Data_${dateStr}_${timeStr}.xlsx`;
+    
+    // 保存文件
+    XLSX.writeFile(wb, fileName);
+    
+    addLog(`🎉 Excel导出成功: ${fileName}`);
+    addLog(`📋 包含 ${selectedIPs.value.length} 个IP的详细分析数据`);
+    addLog(`📊 使用中文指标名称，包含多专家具体评分`);
+    toast.success(`Excel导出成功！包含 ${selectedIPs.value.length} 个IP的详细数据`);
+    
+  } catch (error) {
+    console.error('Excel导出失败:', error);
+    addLog(`❌ Excel导出失败: ${error}`);
+    toast.fail('Excel导出失败，请重试');
+  } finally {
+    loading.value = false;
+    loadingText.value = '';
+  }
+};
 </script>
 
 <style scoped>
@@ -1442,6 +1989,32 @@ const updateFilteredIPs = () => {
 
 .header-btn.analysis-btn {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.header-btn.export-btn {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+}
+
+.header-btn.export-btn:hover {
+  background: linear-gradient(135deg, #ff8a95 0%, #fdbddd 100%);
+}
+
+.header-btn.export-btn:disabled {
+  background: linear-gradient(135deg, #d6d6d6 0%, #e9e9e9 100%);
+  color: #999;
+}
+
+.header-btn.excel-btn {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+
+.header-btn.excel-btn:hover {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
+.header-btn.excel-btn:disabled {
+  background: linear-gradient(135deg, #d6d6d6 0%, #e9e9e9 100%);
+  color: #999;
 }
 
 .btn-icon {
@@ -2286,4 +2859,5 @@ const updateFilteredIPs = () => {
 .header-btn.filter-btn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
-</style> 
+
+</style>
