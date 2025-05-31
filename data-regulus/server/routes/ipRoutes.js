@@ -545,8 +545,8 @@ function parseExpertProjectData(excelData) {
     const allColumns = Object.keys(firstRow);
     console.log('Excel中所有列:', allColumns);
     
-    // 排除非指标列
-    const nonIndicatorColumns = ['expert', 'project_name', 'group_name'];
+    // 排除非指标列 - 添加地址相关字段
+    const nonIndicatorColumns = ['expert', 'project_name', 'group_name', 'province', 'city', 'district', 'full_address'];
     const indicatorColumns = allColumns.filter(col => !nonIndicatorColumns.includes(col));
     console.log('识别到的指标列:', indicatorColumns);
     
@@ -599,6 +599,19 @@ function parseExpertProjectData(excelData) {
         projectSet.add(projectName);
         groupSet.add(groupName);
         
+        // 处理地址信息
+        const province = row.province ? String(row.province).trim() : '';
+        const city = row.city ? String(row.city).trim() : '';
+        const district = row.district ? String(row.district).trim() : '';
+        let fullAddress = row.full_address ? String(row.full_address).trim() : '';
+        
+        // 如果没有full_address，自动拼接
+        if (!fullAddress && (province || city || district)) {
+            const addressParts = [province, city, district].filter(part => part && part !== '');
+            fullAddress = addressParts.join(' ');
+            console.log(`自动拼接地址: ${province} + ${city} + ${district} = ${fullAddress}`);
+        }
+        
         // 构建指标评分数据
         const indicators = {};
         
@@ -622,11 +635,15 @@ function parseExpertProjectData(excelData) {
         
         console.log(`专家 "${expertName}" 有效评分数量: ${validScoreCount}/${validIndicatorColumns.length}`);
         
-        // 创建IP记录 - 直接使用Excel中的值，不进行拼接
+        // 创建IP记录 - 包含地址信息
         const ip = {
             project_name: projectName,
             group_name: groupName,
             expert: expertName,
+            province: province,
+            city: city,
+            district: district,
+            full_address: fullAddress,
             indicators: indicators
         };
         
@@ -641,11 +658,10 @@ function parseExpertProjectData(excelData) {
     
     return {
         ips,
-        groupName: Array.from(groupSet)[0] || '未知组别',
+        groupName: Array.from(groupSet)[0] || '默认组别',
         expertCount: expertSet.size,
         indicatorCount: validIndicatorColumns.length,
-        projectCount: projectSet.size,
-        groupCount: groupSet.size
+        projectCount: projectSet.size
     };
 }
 
@@ -709,7 +725,7 @@ function parseProjectIndicatorMatrix(excelData) {
     console.log('项目总数:', allProjects.size);
     
     // 按项目和专家组织数据
-    const projectExpertData = {}; // { "项目名_专家名": { indicators: {} } }
+    const projectExpertData = {}; // { "项目名_专家名": { indicators: {}, address: {} } }
     
     excelData.forEach((row, rowIndex) => {
         const projectName = row.project_name;
@@ -720,6 +736,18 @@ function parseProjectIndicatorMatrix(excelData) {
             return;
         }
         
+        // 处理地址信息 - 从每行读取
+        const province = row.province ? String(row.province).trim() : '';
+        const city = row.city ? String(row.city).trim() : '';
+        const district = row.district ? String(row.district).trim() : '';
+        let fullAddress = row.full_address ? String(row.full_address).trim() : '';
+        
+        // 如果没有full_address，自动拼接
+        if (!fullAddress && (province || city || district)) {
+            const addressParts = [province, city, district].filter(part => part && part !== '');
+            fullAddress = addressParts.join(' ');
+        }
+        
         // 检查指标是否在系统中存在
         const propertyName = indicatorPropertyMap[indicatorName];
         if (!propertyName) {
@@ -727,60 +755,71 @@ function parseProjectIndicatorMatrix(excelData) {
             return;
         }
         
-        // 为每个专家处理这个指标的评分
+        // 为每个专家创建数据结构
         expertIdentifiers.forEach(expertId => {
-            const expertColumn = `expert_${expertId}`;
-            const score = parseFloat(row[expertColumn]);
-            
-            if (isNaN(score)) {
-                console.warn(`项目 "${projectName}" 指标 "${indicatorName}" 专家 "${expertId}" 评分无效:`, row[expertColumn]);
-                return;
-            }
-            
             const projectExpertKey = `${projectName}_${expertId}`;
             
-            // 初始化项目-专家组合
             if (!projectExpertData[projectExpertKey]) {
                 projectExpertData[projectExpertKey] = {
-                    name: projectName,
-                    group: groupName,
-                    expert: expertId,
-                    indicators: {}
+                    indicators: {},
+                    address: {
+                        province: province,
+                        city: city,
+                        district: district,
+                        full_address: fullAddress
+                    }
                 };
                 
                 // 初始化所有指标为0
-                ipEvaluationService.getAllProperties().forEach(property => {
-                    projectExpertData[projectExpertKey].indicators[property] = 0;
+                allSystemIndicators.forEach(indicator => {
+                    const propName = indicatorPropertyMap[indicator];
+                    if (propName) {
+                        projectExpertData[projectExpertKey].indicators[propName] = 0;
+                    }
                 });
             }
             
-            // 设置当前指标的评分
-            projectExpertData[projectExpertKey].indicators[propertyName] = score;
+            // 获取该专家在当前指标上的评分
+            const expertColumn = `expert_${expertId}`;
+            const score = parseFloat(row[expertColumn]);
+            
+            if (!isNaN(score)) {
+                projectExpertData[projectExpertKey].indicators[propertyName] = score;
+            } else {
+                console.warn(`项目 "${projectName}" 专家 "${expertId}" 在指标 "${indicatorName}" 上的评分无效:`, row[expertColumn]);
+            }
         });
     });
     
-    // 转换为IP数组
-    const ips = Object.values(projectExpertData);
+    // 将组织好的数据转换为IP记录
+    const ips = [];
+    Object.keys(projectExpertData).forEach(projectExpertKey => {
+        const [projectName, expertId] = projectExpertKey.split('_');
+        const data = projectExpertData[projectExpertKey];
+        
+        const ip = {
+            name: projectName,
+            group: groupName,
+            expert: expertId,
+            province: data.address.province,
+            city: data.address.city,
+            district: data.address.district,
+            full_address: data.address.full_address,
+            indicators: data.indicators
+        };
+        
+        ips.push(ip);
+    });
     
     console.log(`总共创建了 ${ips.length} 个IP记录`);
-    console.log('前3个IP记录:', ips.slice(0, 3).map(ip => ({ name: ip.name, expert: ip.expert, group: ip.group })));
-    
-    // 按项目统计专家数量
-    const projectStats = {};
-    ips.forEach(ip => {
-        if (!projectStats[ip.name]) {
-            projectStats[ip.name] = 0;
-        }
-        projectStats[ip.name]++;
-    });
-    console.log('各项目专家数量统计:', projectStats);
+    console.log(`项目数量: ${allProjects.size}, 专家数量: ${expertIdentifiers.length}`);
     
     return {
         ips,
         groupName,
         expertCount: expertIdentifiers.length,
-        indicatorCount: new Set(excelData.map(row => row.index)).size,
-        projectCount: new Set(ips.map(ip => ip.name)).size
+        indicatorCount: Object.keys(indicatorPropertyMap).length,
+        projectCount: allProjects.size
     };
 }
 
@@ -850,21 +889,29 @@ function parseProjectBasedData(excelData) {
             
             console.log(`处理项目: ${projectName}, 组别: ${groupName}`);
             
-            // 为每个专家创建一个IP记录
-            expertIdentifiers.forEach((expertId, expertIndex) => {
-                const expertColumn = `expert_${expertId}`;
-                const score = parseFloat(row[expertColumn]);
-                
-                if (isNaN(score)) {
-                    console.warn(`项目 "${projectName}" 的专家 "${expertId}" 评分无效:`, row[expertColumn]);
-                    return;
-                }
-                
-                // 创建专家IP记录，假设这是一个综合评分，我们将其分配到第一个指标
+            // 处理地址信息
+            const province = row.province ? String(row.province).trim() : '';
+            const city = row.city ? String(row.city).trim() : '';
+            const district = row.district ? String(row.district).trim() : '';
+            let fullAddress = row.full_address ? String(row.full_address).trim() : '';
+            
+            // 如果没有full_address，自动拼接
+            if (!fullAddress && (province || city || district)) {
+                const addressParts = [province, city, district].filter(part => part && part !== '');
+                fullAddress = addressParts.join(' ');
+                console.log(`自动拼接地址: ${province} + ${city} + ${district} = ${fullAddress}`);
+            }
+            
+            // 为每个专家创建一个记录
+            expertIdentifiers.forEach(expertId => {
                 const expertIP = {
                     name: projectName,
                     group: groupName,
-                    expert: `专家${expertId}`,
+                    expert: expertId,
+                    province: province,
+                    city: city,
+                    district: district,
+                    full_address: fullAddress,
                     indicators: {}
                 };
                 
@@ -873,10 +920,18 @@ function parseProjectBasedData(excelData) {
                     expertIP.indicators[property] = 0;
                 });
                 
-                // 将评分设置到第一个指标（作为综合评分的代表）
-                const firstProperty = ipEvaluationService.getAllProperties()[0];
-                if (firstProperty) {
-                    expertIP.indicators[firstProperty] = score;
+                // 从专家评分列设置评分
+                const expertColumn = `expert_${expertId}`;
+                const score = parseFloat(row[expertColumn]);
+                
+                if (!isNaN(score)) {
+                    // 这里假设是综合评分，我们可以按比例分配到各个指标
+                    // 或者可以设置所有指标为相同值
+                    ipEvaluationService.getAllProperties().forEach(property => {
+                        expertIP.indicators[property] = score;
+                    });
+                } else {
+                    console.warn(`项目 "${projectName}" 专家 "${expertId}" 的评分无效:`, row[expertColumn]);
                 }
                 
                 ips.push(expertIP);
@@ -906,38 +961,53 @@ function parseProjectBasedData(excelData) {
             
             console.log(`处理项目: ${projectName}, 组别: ${groupName}`);
             
-            // 创建一个专家评分记录
-            const expertIP = {
-                name: projectName,
-                group: groupName,
-                expert: "综合专家",
-                indicators: {}
-            };
+            // 处理地址信息
+            const province = row.province ? String(row.province).trim() : '';
+            const city = row.city ? String(row.city).trim() : '';
+            const district = row.district ? String(row.district).trim() : '';
+            let fullAddress = row.full_address ? String(row.full_address).trim() : '';
             
-            // 初始化所有指标为0
-            ipEvaluationService.getAllProperties().forEach(property => {
-                expertIP.indicators[property] = 0;
-            });
+            // 如果没有full_address，自动拼接
+            if (!fullAddress && (province || city || district)) {
+                const addressParts = [province, city, district].filter(part => part && part !== '');
+                fullAddress = addressParts.join(' ');
+                console.log(`自动拼接地址: ${province} + ${city} + ${district} = ${fullAddress}`);
+            }
             
-            // 设置每个指标的评分
-            expertIdentifiers.forEach(indicatorId => {
-                const expertColumn = `expert_${indicatorId}`;
+            // 为每个专家创建一个记录
+            expertIdentifiers.forEach(expertId => {
+                const expertIP = {
+                    name: projectName,
+                    group: groupName,
+                    expert: expertId,
+                    province: province,
+                    city: city,
+                    district: district,
+                    full_address: fullAddress,
+                    indicators: {}
+                };
+                
+                // 初始化所有指标为0
+                ipEvaluationService.getAllProperties().forEach(property => {
+                    expertIP.indicators[property] = 0;
+                });
+                
+                // 从专家评分列设置评分
+                const expertColumn = `expert_${expertId}`;
                 const score = parseFloat(row[expertColumn]);
                 
                 if (!isNaN(score)) {
-                    // 将指标标识转换为系统属性名
-                    const propertyName = indicatorPropertyMap[indicatorId];
-                    if (propertyName) {
-                        expertIP.indicators[propertyName] = score;
-                    } else {
-                        console.warn(`指标 "${indicatorId}" 在系统中未找到对应的属性名`);
-                    }
+                    // 这里假设是综合评分，我们可以按比例分配到各个指标
+                    // 或者可以设置所有指标为相同值
+                    ipEvaluationService.getAllProperties().forEach(property => {
+                        expertIP.indicators[property] = score;
+                    });
                 } else {
-                    console.warn(`项目 "${projectName}" 在指标 "${indicatorId}" 上的评分无效:`, row[expertColumn]);
+                    console.warn(`项目 "${projectName}" 专家 "${expertId}" 的评分无效:`, row[expertColumn]);
                 }
+                
+                ips.push(expertIP);
             });
-            
-            ips.push(expertIP);
         });
     }
     
@@ -1045,6 +1115,20 @@ function parseIndicatorBasedData(excelData) {
         
         console.log(`创建IP: ${ipName}, 组别: ${groupName}`);
         
+        // 从第一行数据获取地址信息（假设所有行的地址信息相同）
+        const firstRow = excelData[0];
+        const province = firstRow.province ? String(firstRow.province).trim() : '';
+        const city = firstRow.city ? String(firstRow.city).trim() : '';
+        const district = firstRow.district ? String(firstRow.district).trim() : '';
+        let fullAddress = firstRow.full_address ? String(firstRow.full_address).trim() : '';
+        
+        // 如果没有full_address，自动拼接
+        if (!fullAddress && (province || city || district)) {
+            const addressParts = [province, city, district].filter(part => part && part !== '');
+            fullAddress = addressParts.join(' ');
+            console.log(`自动拼接地址: ${province} + ${city} + ${district} = ${fullAddress}`);
+        }
+        
         // 收集该专家的所有指标评分
         const expertScores = {};
         
@@ -1078,6 +1162,10 @@ function parseIndicatorBasedData(excelData) {
             name: ipName,
             group: groupName,
             expert: expertName,
+            province: province,
+            city: city,
+            district: district,
+            full_address: fullAddress,
             indicators: expertScores
         });
     });
