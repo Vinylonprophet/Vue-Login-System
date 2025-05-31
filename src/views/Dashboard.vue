@@ -1559,170 +1559,62 @@ const exportToPDF = async () => {
     // 保存当前激活的图表
     const originalActiveChart = activeChart.value;
     
-    // 计算有多少个图表需要导出
-    const charts = [
-      { id: 'fitness', title: 'Genetic Algorithm Fitness Evolution', condition: evaluationResult.value?.fitnessHistory && evaluationResult.value.fitnessHistory.length > 0 },
-      { id: 'scores', title: 'IP Score Distribution', condition: evaluationResult.value?.evaluation && evaluationResult.value.evaluation.length > 0 },
-      { id: 'radar', title: 'Key Indicator Weights', condition: evaluationResult.value?.weights && evaluationResult.value.weights.length > 0 },
-      { id: 'neural', title: 'Neural Network Training Loss', condition: neuralNetworkResult.value !== null },
-      { id: 'importance', title: 'Feature Importance Analysis', condition: neuralNetworkResult.value?.feature_importance && neuralNetworkResult.value.feature_importance.length > 0 },
-      { id: 'shap', title: 'SHAP Feature Contribution', condition: shapResult.value !== null },
-      { id: 'pca', title: 'PCA Dimensionality Reduction', condition: pcaResult.value !== null },
-      { id: 'cluster', title: 'Advanced Clustering Analysis', condition: advancedClusterImage.value !== '' }
-    ];
+    // 计算有多少个图表需要导出 - 使用与界面相同的条件
+    const charts = chartTabs.value.map(tab => ({
+      id: tab.id,
+      title: getChineseChartTitle(tab.id),
+      condition: !tab.disabled // 使用与界面相同的disabled逻辑
+    }));
     
     const validCharts = charts.filter(c => c.condition);
     
     addLog(`🚀 开始PDF导出流程`);
-    addLog(`📊 发现 ${validCharts.length} 个可导出图表`);
-    addLog(`⏰ 预计需要 ${Math.ceil(validCharts.length * 2.5)} 秒完成`);
-    addLog(`💡 PDF将使用英文标题以确保最佳兼容性`);
+    addLog(`📊 界面显示图表: ${chartTabs.value.length} 个`);
+    addLog(`✅ 可导出图表: ${validCharts.length} 个`);
+    addLog(`📋 图表列表: ${validCharts.map(c => c.title).join(', ')}`);
+    addLog(`⏰ 预计需要 ${Math.ceil(validCharts.length * 6)} 秒完成（包含AI分析）`);
+    addLog(`💡 使用HTML转PDF方式，完美支持中文显示`);
+    addLog(`🤖 每个图表都将生成专业AI分析`);
     addLog(`⚡ 正在处理复杂图表，请耐心等待...`);
     
-    // 创建PDF实例
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
+    // 创建临时容器来放置PDF内容
+    const tempContainer = document.createElement('div');
+    tempContainer.style.position = 'absolute';
+    tempContainer.style.top = '-9999px';
+    tempContainer.style.left = '-9999px';
+    tempContainer.style.width = '210mm'; // A4宽度
+    tempContainer.style.padding = '20px';
+    tempContainer.style.fontFamily = 'Arial, "Microsoft YaHei", "SimSun", sans-serif';
+    tempContainer.style.fontSize = '14px';
+    tempContainer.style.lineHeight = '1.6';
+    tempContainer.style.color = '#333';
+    tempContainer.style.backgroundColor = 'white';
+    document.body.appendChild(tempContainer);
     
-    // PDF页面设置
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 20;
-    const contentWidth = pageWidth - 2 * margin;
-    let currentY = margin;
+    // 创建PDF标题页
+    const titleSection = document.createElement('div');
+    titleSection.innerHTML = `
+      <div style="text-align: center; margin-bottom: 40px;">
+        <h1 style="font-size: 24px; color: #2c3e50; margin-bottom: 20px;">少数民族体育IP分析报告</h1>
+        <p style="font-size: 14px; color: #666;">生成时间: ${new Date().toLocaleString('zh-CN')}</p>
+        <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+          <h3 style="margin-bottom: 15px;">分析概况</h3>
+          <p>分析IP总数: ${selectedIPs.value.length}</p>
+          <p>使用指标数: ${filteredThirdIndicators.value.length}</p>
+          <p>生成系统: 少数民族体育IP评估系统</p>
+        </div>
+      </div>
+    `;
+    tempContainer.appendChild(titleSection);
     
-    // 添加标题 - 使用纯英文避免中文字体问题
-    pdf.setFontSize(20);
-    pdf.setFont('helvetica', 'bold');
-    const title = 'Ethnic Sports IP Analysis Report';
-    const titleWidth = pdf.getTextWidth(title);
-    pdf.text(title, (pageWidth - titleWidth) / 2, currentY);
-    currentY += 15;
-    
-    // 添加生成时间
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'normal');
-    const timestamp = `Generated: ${new Date().toLocaleString('en-US')}`;
-    pdf.text(timestamp, margin, currentY);
-    currentY += 10;
-    
-    // 添加分析概况
-    pdf.setFontSize(14);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Analysis Summary', margin, currentY);
-    currentY += 8;
-    
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(`Total IPs Analyzed: ${selectedIPs.value.length}`, margin, currentY);
-    currentY += 6;
-    pdf.text(`Indicators Used: ${filteredThirdIndicators.value.length}`, margin, currentY);
-    currentY += 6;
-    pdf.text(`Generated by: Ethnic Sports IP Evaluation System`, margin, currentY);
-    currentY += 10;
-    
-    // 添加详细IP数据表格
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Detailed IP Analysis Data', margin, currentY);
-    currentY += 6;
-    
-    // 添加说明
-    pdf.setFontSize(8);
-    pdf.setFont('helvetica', 'italic');
-    pdf.text('(Using English identifiers to avoid character encoding issues)', margin, currentY);
-    currentY += 8;
-    
-    // 表格标题行
-    pdf.setFontSize(8);
-    pdf.setFont('helvetica', 'bold');
-    const colWidths = [35, 35, 25, 30, 45]; // 列宽度
-    const headers = ['Project Name', 'Expert/Group', 'Group', 'Final Score', 'Top 3 Indicators'];
-    let colX = margin;
-    
-    headers.forEach((header, index) => {
-      pdf.text(header, colX, currentY);
-      colX += colWidths[index];
-    });
-    currentY += 6;
-    
-    // 添加分隔线
-    pdf.line(margin, currentY - 2, margin + colWidths.reduce((sum, w) => sum + w, 0), currentY - 2);
-    
-    // 获取选中IP的详细数据
-    const selectedIPData: any[] = [];
-    for (const ipId of selectedIPs.value) {
-      const ip = ips.value.find(item => item.id === ipId);
-      if (ip) {
-        selectedIPData.push(ip);
-      }
-    }
-    
-    // 表格数据行
-    pdf.setFont('helvetica', 'normal');
-    selectedIPData.slice(0, 15).forEach((ip: any, ipIndex: number) => { // 限制显示数量避免页面过长
-      if (currentY > pageHeight - 40) {
-        pdf.addPage();
-        currentY = margin;
-      }
-      
-      colX = margin;
-      
-      // 项目名称 (使用英文ID避免乱码)
-      const projectName = `Project_${ipIndex + 1}`;
-      pdf.text(projectName, colX, currentY);
-      colX += colWidths[0];
-      
-      // 专家/组别信息 (使用英文标识)
-      const expertInfo = ip._isGroup ? 'Multi-Expert' : `Expert_${ipIndex + 1}`;
-      pdf.text(expertInfo, colX, currentY);
-      colX += colWidths[1];
-      
-      // 组别 (使用英文标识)
-      const groupName = `Group_${(['A', 'B', 'C', 'D', 'E'])[ipIndex % 5]}`;
-      pdf.text(groupName, colX, currentY);
-      colX += colWidths[2];
-      
-      // 最终评分
-      let finalScore = 'N/A';
-      if (evaluationResult.value?.evaluation) {
-        const evalItem = evaluationResult.value.evaluation.find((item: any) => item.name === ip.project_name);
-        if (evalItem) {
-          finalScore = evalItem.score.toFixed(3);
-        }
-      }
-      pdf.text(finalScore, colX, currentY);
-      colX += colWidths[3];
-      
-      // 前3个指标值 (使用英文标识)
-      if (ip.indicators && typeof ip.indicators === 'object') {
-        const indicatorValues = Object.values(ip.indicators as Record<string, number>);
-        const topIndicators = indicatorValues
-          .map((value: any, index: number) => ({ value, index }))
-          .sort((a: any, b: any) => b.value - a.value)
-          .slice(0, 3)
-          .map((item: any) => `I${item.index + 1}:${item.value.toFixed(1)}`)
-          .join(' ');
-        const indicatorText = topIndicators.length > 20 ? topIndicators.substring(0, 20) + '...' : topIndicators;
-        pdf.text(indicatorText, colX, currentY);
-      } else {
-        pdf.text('No Data', colX, currentY);
-      }
-      
-      currentY += 5;
-    });
-    
-    currentY += 10;
-    
-    // 开始处理图表导出
+    // 处理每个图表
     let processedCharts = 0;
     
     for (const chart of validCharts) {
       try {
         processedCharts++;
-        loadingText.value = `导出图表 ${processedCharts}/${validCharts.length}: ${chart.title}`;
+        const chineseTitle = chart.title;
+        loadingText.value = `处理图表 ${processedCharts}/${validCharts.length}: ${chineseTitle}`;
         
         let imageDataUrl: string | null = null;
         
@@ -1730,20 +1622,47 @@ const exportToPDF = async () => {
           const imgElement = document.querySelector('.ml-chart-image img') as HTMLImageElement;
           if (imgElement && imgElement.src) {
             imageDataUrl = imgElement.src;
-            addLog(`✅ 获取聚类图片: ${chart.title}`);
+            addLog(`✅ 获取聚类图片: ${chineseTitle}`);
           }
         } else {
-          addLog(`🔄 准备导出图表 (${processedCharts}/${validCharts.length}): ${chart.title}`);
+          addLog(`🔄 准备导出图表 (${processedCharts}/${validCharts.length}): ${chineseTitle}`);
           
           activeChart.value = chart.id;
           await nextTick();
           
           let waitTime = chart.id === 'shap' ? 3000 : chart.id === 'neural' || chart.id === 'importance' ? 2500 : 2000;
-          addLog(`⏳ 等待图表渲染 (${waitTime}ms): ${chart.title}`);
+          addLog(`⏳ 等待图表渲染 (${waitTime}ms): ${chineseTitle}`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
           await nextTick();
           
-          const canvasId = chart.id === 'importance' ? 'featureImportanceChart' : `${chart.id}Chart`;
+          // 修复canvas ID匹配问题
+          let canvasId = '';
+          switch (chart.id) {
+            case 'fitness':
+              canvasId = 'fitnessChart';
+              break;
+            case 'scores':
+              canvasId = 'scoreChart';
+              break;
+            case 'radar':
+              canvasId = 'radarChart';
+              break;
+            case 'neural':
+              canvasId = 'nnLossChart'; // 修复神经网络图表ID
+              break;
+            case 'importance':
+              canvasId = 'featureImportanceChart';
+              break;
+            case 'shap':
+              canvasId = 'shapChart';
+              break;
+            case 'pca':
+              canvasId = 'pcaChart';
+              break;
+            default:
+              canvasId = `${chart.id}Chart`;
+          }
+          
           const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
           if (canvas) {
             const ctx = canvas.getContext('2d');
@@ -1753,129 +1672,119 @@ const exportToPDF = async () => {
               
               if (hasContent) {
                 imageDataUrl = canvas.toDataURL('image/png', 1.0);
-                addLog(`✅ 成功获取图表数据: ${chart.title}`);
+                addLog(`✅ 成功获取图表数据: ${chineseTitle}`);
               } else {
-                addLog(`⚠️ 图表内容为空: ${chart.title}`);
+                addLog(`⚠️ 图表内容为空: ${chineseTitle}`);
               }
             }
+          } else {
+            addLog(`⚠️ 未找到图表canvas元素: ${canvasId}`);
           }
         }
         
         if (imageDataUrl && imageDataUrl !== 'data:,') {
-          if (currentY + 80 > pageHeight - margin) {
-            pdf.addPage();
-            currentY = margin;
+          // 获取AI分析
+          addLog(`🤖 正在为图表 "${chineseTitle}" 生成AI分析...`);
+          loadingText.value = `生成AI分析 ${processedCharts}/${validCharts.length}: ${chineseTitle}`;
+          
+          let aiAnalysis = '';
+          try {
+            aiAnalysis = await getChartAIAnalysis(chart.id);
+            addLog(`✅ AI分析已生成: ${chineseTitle}`);
+          } catch (error) {
+            console.warn(`AI分析失败 for ${chineseTitle}:`, error);
+            aiAnalysis = '该图表的AI分析暂时不可用。';
           }
           
-          pdf.setFontSize(12);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text(chart.title, margin, currentY);
-          currentY += 8;
+          // 创建图表段落
+          const chartSection = document.createElement('div');
+          chartSection.style.pageBreakBefore = 'always';
+          chartSection.style.marginBottom = '30px';
+          chartSection.innerHTML = `
+            <div style="margin-bottom: 20px;">
+              <h2 style="font-size: 18px; color: #2c3e50; margin-bottom: 15px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">${chineseTitle}</h2>
+              <div style="text-align: center; margin-bottom: 15px;">
+                <img src="${imageDataUrl}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
+              </div>
+              <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #3498db;">
+                <h3 style="color: #2c3e50; margin-bottom: 10px; font-size: 16px;">🤖 AI智能分析</h3>
+                <p style="margin: 0; line-height: 1.8; text-align: justify;">${aiAnalysis}</p>
+              </div>
+            </div>
+          `;
+          tempContainer.appendChild(chartSection);
           
-          const maxWidth = contentWidth;
-          const maxHeight = 70;
-          pdf.addImage(imageDataUrl, 'PNG', margin, currentY, maxWidth, maxHeight);
-          currentY += maxHeight + 10;
-          
-          // 添加简化的数据分析 (使用英文标识避免乱码)
-          pdf.setFontSize(8);
-          pdf.setFont('helvetica', 'normal');
-          if (chart.id === 'radar' && evaluationResult.value?.weights) {
-            pdf.text('Top Weights (English IDs):', margin, currentY);
-            currentY += 4;
-            const weights = evaluationResult.value.weights;
-            weights.slice(0, 5).forEach((weight: number, idx: number) => {
-              pdf.text(`${idx + 1}. Indicator_${idx + 1}: ${(weight * 100).toFixed(2)}%`, margin + 5, currentY);
-              currentY += 3;
-            });
-          } else if (chart.id === 'importance' && neuralNetworkResult.value?.feature_importance) {
-            pdf.text('Top Features (English IDs):', margin, currentY);
-            currentY += 4;
-            const importance = neuralNetworkResult.value.feature_importance;
-            importance.slice(0, 5).forEach((score: number, idx: number) => {
-              pdf.text(`${idx + 1}. Feature_${idx + 1}: ${score.toFixed(4)}`, margin + 5, currentY);
-              currentY += 3;
-            });
-          }
-          
-          currentY += 5;
-          addLog(`✅ 已添加图表到PDF: ${chart.title}`);
+          addLog(`✅ 已添加图表到PDF: ${chineseTitle}`);
         } else {
-          addLog(`⚠️ 跳过图表: ${chart.title} (无有效图像数据)`);
+          addLog(`⚠️ 跳过图表: ${chineseTitle} (无有效图像数据)`);
         }
       } catch (error) {
-        addLog(`❌ 处理图表失败: ${chart.title}`);
+        const chineseTitle = chart.title;
+        addLog(`❌ 处理图表失败: ${chineseTitle}`);
       }
     }
     
     // 恢复原来的激活图表
     activeChart.value = originalActiveChart;
     
-    // 添加映射表到最后一页
-    if (currentY + 60 > pageHeight - margin) {
+    // 使用html2canvas转换为图片然后生成PDF
+    loadingText.value = '正在生成PDF文件...';
+    addLog(`📄 开始转换HTML为PDF...`);
+    
+    const canvas = await html2canvas(tempContainer, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      width: tempContainer.scrollWidth,
+      height: tempContainer.scrollHeight
+    });
+    
+    // 清理临时容器
+    document.body.removeChild(tempContainer);
+    
+    // 创建PDF
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+    
+    const imgData = canvas.toDataURL('image/png');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+    
+    // 如果内容超过一页，需要分页
+    let heightLeft = imgHeight;
+    let position = 0;
+    
+    // 添加第一页
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pdfHeight;
+    
+    // 添加后续页面
+    while (heightLeft >= 0) {
+      position = heightLeft - imgHeight;
       pdf.addPage();
-      currentY = margin;
-    }
-    
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('English ID Mapping Table', margin, currentY);
-    currentY += 10;
-    
-    pdf.setFontSize(8);
-    pdf.setFont('helvetica', 'normal');
-    
-    // 项目映射
-    pdf.text('Project Mapping:', margin, currentY);
-    currentY += 4;
-    selectedIPData.slice(0, 10).forEach((ip: any, index: number) => {
-      const mapping = `Project_${index + 1} = ${ip.project_name || 'Unknown'}`;
-      if (mapping.length > 60) {
-        pdf.text(mapping.substring(0, 60) + '...', margin + 5, currentY);
-      } else {
-        pdf.text(mapping, margin + 5, currentY);
-      }
-      currentY += 3;
-    });
-    
-    currentY += 5;
-    
-    // 组别映射
-    pdf.text('Group Mapping:', margin, currentY);
-    currentY += 4;
-    const uniqueGroups = [...new Set(selectedIPData.map((ip: any) => ip.group_name))];
-    uniqueGroups.slice(0, 5).forEach((group: any, index: number) => {
-      const groupLetter = ['A', 'B', 'C', 'D', 'E'][index];
-      const mapping = `Group_${groupLetter} = ${group || 'Unknown'}`;
-      pdf.text(mapping, margin + 5, currentY);
-      currentY += 3;
-    });
-    
-    await nextTick();
-    
-    // 添加页脚
-    const pageCount = pdf.internal.pages.length - 1; // 减去空白页
-    for (let i = 1; i <= pageCount; i++) {
-      pdf.setPage(i);
-      pdf.setFontSize(8);
-      pdf.setFont('helvetica', 'normal');
-      const footerText = `Page ${i} of ${pageCount}`;
-      const footerWidth = pdf.getTextWidth(footerText);
-      pdf.text(footerText, (pageWidth - footerWidth) / 2, pageHeight - 10);
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
     }
     
     // 生成文件名
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-    const fileName = `IP-Analysis-Report_${dateStr}_${timeStr}.pdf`;
+    const fileName = `少数民族体育IP分析报告_${dateStr}_${timeStr}.pdf`;
     
     // 保存PDF
     pdf.save(fileName);
     
     addLog(`🎉 PDF导出成功: ${fileName} (包含 ${validCharts.length} 个图表)`);
-    addLog(`📄 PDF标题已优化为英文格式，避免乱码问题`);
-    toast.success(`PDF导出成功！包含 ${validCharts.length} 个图表，使用英文标题`);
+    addLog(`📄 PDF完美支持中文显示，包含详细AI分析`);
+    addLog(`🤖 每个图表都包含专业中文AI分析`);
+    toast.success(`PDF导出成功！包含 ${validCharts.length} 个图表和中文AI分析`);
     
   } catch (error) {
     console.error('PDF导出失败:', error);
@@ -2383,6 +2292,94 @@ onMounted(() => {
     document.removeEventListener('keydown', handleGlobalKeydown);
   };
 });
+
+// 获取图表AI分析的辅助函数
+const getChartAIAnalysis = async (chartId: string): Promise<string> => {
+  try {
+    let analysisPrompt = '';
+    
+    switch (chartId) {
+      case 'fitness':
+        analysisPrompt = '请详细分析适应度变化图表，重点说明遗传算法的优化过程、收敛趋势和训练效果，控制在100-150字内。';
+        break;
+      case 'scores':
+        analysisPrompt = '请详细分析IP评分分布图表，识别表现优秀和需要改进的项目，并提供针对性建议，控制在100-150字内。';
+        break;
+      case 'radar':
+        analysisPrompt = '请详细分析指标权重雷达图，解释各指标的相对重要性和关键影响因素，控制在100-150字内。';
+        break;
+      case 'neural':
+        analysisPrompt = '请详细分析神经网络训练图表，评估模型的学习能力、收敛速度和性能表现，控制在100-150字内。';
+        break;
+      case 'importance':
+        analysisPrompt = '请详细分析特征重要性图表，识别对预测结果最有影响力的特征及其业务意义，控制在100-150字内。';
+        break;
+      case 'shap':
+        analysisPrompt = '请详细分析SHAP图表，解释模型的可解释性分析结果和各特征的贡献度，控制在100-150字内。';
+        break;
+      case 'pca':
+        analysisPrompt = '请详细分析PCA降维图表，解释主成分和数据分布，控制在100-150字内。';
+        break;
+      case 'cluster':
+        analysisPrompt = '请详细分析聚类图表，解释分组模式和聚类特征，控制在100-150字内。';
+        break;
+      default:
+        return '该图表暂无可用分析。';
+    }
+    
+    // 准备分析数据
+    const analysisData = {
+      selectedIPCount: selectedIPs.value.length,
+      indicatorCount: filteredThirdIndicators.value.length,
+      evaluationResult: evaluationResult.value,
+      weights: evaluationResult.value?.weights,
+      neuralNetworkResult: neuralNetworkResult.value,
+      shapResult: shapResult.value,
+      pcaResult: pcaResult.value,
+      advancedClusterResult: advancedClusterResult.value,
+      customPrompt: analysisPrompt
+    };
+    
+    // 获取当前可用的图表类型
+    const availableCharts = chartTabs.value
+      .filter(tab => !tab.disabled)
+      .map(tab => tab.title);
+    
+    const response = await ipApi.aiAnalysis(analysisData, availableCharts);
+    
+    if (response.success && response.data?.analysis) {
+      // 清理AI分析结果，移除HTML标签，保持简洁
+      return response.data.analysis
+        .replace(/<[^>]*>/g, '') // 移除HTML标签
+        .replace(/\*\*/g, '') // 移除粗体标记
+        .replace(/###?\s*/g, '') // 移除标题标记
+        .trim();
+    } else {
+      return '该图表的AI分析生成失败，请稍后重试。';
+    }
+  } catch (error) {
+    console.error(`AI分析失败 for chart ${chartId}:`, error);
+    return '由于技术问题，该图表的AI分析暂时不可用。';
+  }
+};
+
+// 获取中文图表标题
+const getChineseChartTitle = (chartId: string): string => {
+  const titleMap: Record<string, string> = {
+    'fitness': '遗传算法适应度变化曲线',
+    'scores': 'IP评分分布图',
+    'radar': '关键指标权重雷达图',
+    'neural': '神经网络训练损失曲线',
+    'importance': '特征重要性分析图',
+    'shap': 'SHAP特征贡献度分析图',
+    'pca': 'PCA主成分降维图',
+    'cluster': '高级聚类分析图'
+  };
+  
+  return titleMap[chartId] || '未知图表';
+};
+
+// Excel导出功能
 </script>
 
 <style scoped>

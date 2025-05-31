@@ -15,6 +15,8 @@
     "chart.js": "^4.4.9",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
+    "jspdf-font": "^1.0.7",
     "unocss": "^66.1.2",
     "vant": "^4.9.19",
     "vue": "^3.5.13",
