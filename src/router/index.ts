@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Dashboard from '../views/Dashboard.vue'
+import DataAnalysis from '../views/DataAnalysis.vue'
 import IPManagement from '../views/IPManagement.vue'
 
 const routes = [
@@ -23,6 +24,11 @@ const routes = [
     path: '/dashboard',
     name: 'Dashboard',
     component: Dashboard
+  },
+  {
+    path: '/data-analysis',
+    name: 'DataAnalysis',
+    component: DataAnalysis
   },
   {
     path: '/ip-management',

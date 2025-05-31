@@ -20,7 +20,7 @@ const checkLoginStatus = async () => {
   } catch (error) {
     isLoggedIn.value = false
   }
-  }
+}
   
 // 更新导航栏显示状态
 const updateNavVisibility = () => {
@@ -65,9 +65,15 @@ const logout = async () => {
         
         <div class="nav-menu">
           <router-link to="/dashboard" class="nav-link">
-            <span class="nav-icon">🏠</span>
-            仪表盘
+            <span class="nav-icon">🗺️</span>
+            可视化大屏
           </router-link>
+          
+          <router-link to="/data-analysis" class="nav-link">
+            <span class="nav-icon">📊</span>
+            数据分析
+          </router-link>
+          
           <router-link to="/ip-management" class="nav-link">
             <span class="nav-icon">🗂️</span>
             数据管理
