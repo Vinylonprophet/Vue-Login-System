@@ -82,6 +82,10 @@ export interface IP {
   group_name: string;
   expert: string;
   indicators: Record<string, number>;
+  province?: string;        // 省份
+  city?: string;           // 城市  
+  district?: string;       // 区县
+  full_address?: string;   // 完整地址
   createdAt: string;
   updatedAt: string;
   expertCount?: number; // 专家数量（聚合记录）

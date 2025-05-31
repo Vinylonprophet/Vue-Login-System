@@ -1397,28 +1397,13 @@ const loadIPLocationData = async () => {
         })
       
       console.log('✅ 真实IP数据处理完成:', ipsWithLocation.length, '个项目')
-      console.log('📊 省份分布预览:', ipsWithLocation.map(ip => `${ip.name}(${ip.province})`).slice(0, 5))
       
-      ipLocationData.value = ipsWithLocation
-      
-      // 如果真实数据太少，添加一些示例数据确保地图有颜色
-      if (ipsWithLocation.length < 5) {
-        console.log('📍 真实数据较少，添加示例数据以展示地图效果')
-        const sampleData = [
-          { name: '新疆马术', expert: '阿里木', group: '传统体育', province: '新疆', city: '乌鲁木齐市', district: '天山区', fullAddress: '新疆 乌鲁木齐市 天山区', value: 1 },
-          { name: '西藏牦牛竞技', expert: '扎西', group: '民族体育', province: '西藏', city: '拉萨市', district: '城关区', fullAddress: '西藏 拉萨市 城关区', value: 1 },
-          { name: '内蒙古摔跤', expert: '巴图', group: '竞技体育', province: '内蒙古', city: '呼和浩特市', district: '新城区', fullAddress: '内蒙古 呼和浩特市 新城区', value: 1 },
-          { name: '云南龙舟', expert: '李明', group: '水上运动', province: '云南', city: '昆明市', district: '五华区', fullAddress: '云南 昆明市 五华区', value: 1 },
-          { name: '贵州芦笙舞', expert: '杨花', group: '民族舞蹈', province: '贵州', city: '贵阳市', district: '南明区', fullAddress: '贵州 贵阳市 南明区', value: 1 },
-          { name: '广西山歌', expert: '刘三姐', group: '民族音乐', province: '广西', city: '南宁市', district: '青秀区', fullAddress: '广西 南宁市 青秀区', value: 1 },
-          { name: '江苏武术', expert: '王师傅', group: '传统武术', province: '江苏', city: '南京市', district: '玄武区', fullAddress: '江苏 南京市 玄武区', value: 1 },
-          { name: '四川变脸', expert: '陈大师', group: '民间艺术', province: '四川', city: '成都市', district: '锦江区', fullAddress: '四川 成都市 锦江区', value: 1 },
-          { name: '新疆舞蹈', expert: '古丽', group: '民族舞蹈', province: '新疆', city: '喀什地区', district: '喀什市', fullAddress: '新疆 喀什地区 喀什市', value: 1 },
-          { name: '西藏唐卡', expert: '次仁', group: '民间艺术', province: '西藏', city: '日喀则市', district: '桑珠孜区', fullAddress: '西藏 日喀则市 桑珠孜区', value: 1 }
-        ]
-        
-        // 合并真实数据和示例数据
-        ipLocationData.value = [...ipsWithLocation, ...sampleData]
+      if (ipsWithLocation.length > 0) {
+        console.log('📊 省份分布预览:', ipsWithLocation.map(ip => `${ip.name}(${ip.province})`).slice(0, 5))
+        ipLocationData.value = ipsWithLocation
+      } else {
+        console.log('⚠️ 数据库中没有包含地址信息的项目数据')
+        ipLocationData.value = []
       }
       
       // 统计数据
@@ -1434,63 +1419,35 @@ const loadIPLocationData = async () => {
       
       console.log('✅ IP地址数据加载完成')
       console.log('📊 统计信息:', mapStats)
-      console.log('📍 项目分布:', ipLocationData.value.slice(0, 5), '...')
       
       return ipLocationData.value
     } else {
-      console.log('⚠️ 暂无IP地址数据，使用默认示例数据')
+      console.log('⚠️ 数据库中暂无IP数据')
       
-      // 如果没有任何数据，使用完整的示例数据集
-      const defaultData = [
-        { name: '新疆马术', expert: '阿里木', group: '传统体育', province: '新疆', city: '乌鲁木齐市', district: '天山区', fullAddress: '新疆 乌鲁木齐市 天山区', value: 1 },
-        { name: '西藏牦牛竞技', expert: '扎西', group: '民族体育', province: '西藏', city: '拉萨市', district: '城关区', fullAddress: '西藏 拉萨市 城关区', value: 1 },
-        { name: '内蒙古摔跤', expert: '巴图', group: '竞技体育', province: '内蒙古', city: '呼和浩特市', district: '新城区', fullAddress: '内蒙古 呼和浩特市 新城区', value: 1 },
-        { name: '云南龙舟', expert: '李明', group: '水上运动', province: '云南', city: '昆明市', district: '五华区', fullAddress: '云南 昆明市 五华区', value: 1 },
-        { name: '贵州芦笙舞', expert: '杨花', group: '民族舞蹈', province: '贵州', city: '贵阳市', district: '南明区', fullAddress: '贵州 贵阳市 南明区', value: 1 },
-        { name: '广西山歌', expert: '刘三姐', group: '民族音乐', province: '广西', city: '南宁市', district: '青秀区', fullAddress: '广西 南宁市 青秀区', value: 1 },
-        { name: '江苏武术', expert: '王师傅', group: '传统武术', province: '江苏', city: '南京市', district: '玄武区', fullAddress: '江苏 南京市 玄武区', value: 1 },
-        { name: '四川变脸', expert: '陈大师', group: '民间艺术', province: '四川', city: '成都市', district: '锦江区', fullAddress: '四川 成都市 锦江区', value: 1 },
-        { name: '新疆舞蹈', expert: '古丽', group: '民族舞蹈', province: '新疆', city: '喀什地区', district: '喀什市', fullAddress: '新疆 喀什地区 喀什市', value: 1 },
-        { name: '西藏唐卡', expert: '次仁', group: '民间艺术', province: '西藏', city: '日喀则市', district: '桑珠孜区', fullAddress: '西藏 日喀则市 桑珠孜区', value: 1 },
-        { name: '北京太极', expert: '张大师', group: '传统武术', province: '北京', city: '东城区', district: '王府井街道', fullAddress: '北京 东城区 王府井街道', value: 1 },
-        { name: '上海龙狮', expert: '李师父', group: '民俗表演', province: '上海', city: '黄浦区', district: '南京东路街道', fullAddress: '上海 黄浦区 南京东路街道', value: 1 },
-        { name: '广东武术', expert: '黄飞鸿', group: '传统武术', province: '广东', city: '广州市', district: '越秀区', fullAddress: '广东 广州市 越秀区', value: 1 },
-        { name: '山东杂技', expert: '吴大师', group: '民间艺术', province: '山东', city: '济南市', district: '历下区', fullAddress: '山东 济南市 历下区', value: 1 },
-        { name: '河北杂技', expert: '赵师傅', group: '民间艺术', province: '河北', city: '石家庄市', district: '长安区', fullAddress: '河北 石家庄市 长安区', value: 1 }
-      ]
+      // 不使用示例数据，保持空状态
+      ipLocationData.value = []
       
-      ipLocationData.value = defaultData
-      
-      // 统计数据
-      mapStats.totalProjects = defaultData.length
-      mapStats.provinceCount = new Set(defaultData.map(item => item.province)).size
-      mapStats.cityCount = new Set(defaultData.map(item => item.city)).size
-      
-      // 省份分布统计
+      // 统计数据全部为0
+      mapStats.totalProjects = 0
+      mapStats.provinceCount = 0
+      mapStats.cityCount = 0
       mapStats.regionDistribution = {}
-      defaultData.forEach(item => {
-        mapStats.regionDistribution[item.province] = (mapStats.regionDistribution[item.province] || 0) + 1
-      })
       
-      console.log('📊 使用示例数据统计:', mapStats)
-      return defaultData
+      console.log('📊 数据库无数据，统计信息归零')
+      return []
     }
   } catch (error) {
     console.error('❌ 加载IP地址数据失败:', error)
-    // 即使出错也提供基础示例数据
-    const errorFallbackData = [
-      { name: '示例项目1', expert: '示例专家1', group: '示例组别', province: '新疆', city: '乌鲁木齐市', district: '', fullAddress: '新疆 乌鲁木齐市', value: 1 },
-      { name: '示例项目2', expert: '示例专家2', group: '示例组别', province: '西藏', city: '拉萨市', district: '', fullAddress: '西藏 拉萨市', value: 1 },
-      { name: '示例项目3', expert: '示例专家3', group: '示例组别', province: '内蒙古', city: '呼和浩特市', district: '', fullAddress: '内蒙古 呼和浩特市', value: 1 }
-    ]
     
-    ipLocationData.value = errorFallbackData
-    mapStats.totalProjects = errorFallbackData.length
-    mapStats.provinceCount = 3
-    mapStats.cityCount = 3
-    mapStats.regionDistribution = { '新疆': 1, '西藏': 1, '内蒙古': 1 }
+    // 出错时也不使用示例数据
+    ipLocationData.value = []
+    mapStats.totalProjects = 0
+    mapStats.provinceCount = 0
+    mapStats.cityCount = 0
+    mapStats.regionDistribution = {}
     
-    return errorFallbackData
+    console.log('❌ 数据加载失败，统计信息归零')
+    return []
   }
 }
 

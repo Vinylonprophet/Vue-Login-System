@@ -622,7 +622,28 @@ const selectIP = (ip: IP) => {
   
   // 更新地址信息（如果存在）
   const selectedIPData = ip as IPWithScore;
-  ipForm.addressArray = [(selectedIPData.province || ''), (selectedIPData.city || ''), (selectedIPData.district || '')].filter(Boolean);
+  if (selectedIPData.province || selectedIPData.city || selectedIPData.district) {
+    // 更新各个地址字段
+    ipForm.province = selectedIPData.province || '';
+    ipForm.city = selectedIPData.city || '';
+    ipForm.district = selectedIPData.district || '';
+    
+    // 构建地址数组用于级联选择器
+    const addressParts = [];
+    if (ipForm.province) addressParts.push(ipForm.province);
+    if (ipForm.city) addressParts.push(ipForm.city);
+    if (ipForm.district) addressParts.push(ipForm.district);
+    ipForm.addressArray = addressParts;
+    
+    addLog(`填充地址信息: ${ipForm.province} ${ipForm.city} ${ipForm.district}`);
+  } else {
+    // 清空地址信息
+    ipForm.province = '';
+    ipForm.city = '';
+    ipForm.district = '';
+    ipForm.addressArray = [];
+    addLog('该IP无地址信息');
+  }
   
   // 清空现有的指标值
   initializeIndicatorValues();
@@ -986,6 +1007,30 @@ const editExpertScore = (expert: IP) => {
   ipForm.project_name = expert.project_name;
   ipForm.group_name = expert.group_name;
   ipForm.expert = expert.expert;
+  
+  // 填充地址信息
+  const expertWithAddress = expert as any; // 临时类型转换
+  if (expertWithAddress.province || expertWithAddress.city || expertWithAddress.district) {
+    ipForm.province = expertWithAddress.province || '';
+    ipForm.city = expertWithAddress.city || '';
+    ipForm.district = expertWithAddress.district || '';
+    
+    // 构建地址数组用于级联选择器
+    const addressParts = [];
+    if (ipForm.province) addressParts.push(ipForm.province);
+    if (ipForm.city) addressParts.push(ipForm.city);
+    if (ipForm.district) addressParts.push(ipForm.district);
+    ipForm.addressArray = addressParts;
+    
+    addLog(`填充地址信息: ${ipForm.province} ${ipForm.city} ${ipForm.district}`);
+  } else {
+    // 清空地址信息
+    ipForm.province = '';
+    ipForm.city = '';
+    ipForm.district = '';
+    ipForm.addressArray = [];
+    addLog('该专家评分无地址信息');
+  }
   
   // 填充指标值
   initializeIndicatorValues();
