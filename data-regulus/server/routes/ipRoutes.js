@@ -1262,139 +1262,181 @@ router.post('/import', async (req, res) => {
 // AI分析接口 - 使用DeepSeek API
 router.post('/ai-analysis', async (req, res) => {
     try {
-        const { analysisData, chartTypes } = req.body;
+        const { analysisData, chartTypes, isChartAnalysisMode } = req.body;
         
-        if (!analysisData || !chartTypes) {
+        if (!analysisData) {
             return res.status(400).json({
                 success: false,
-                message: '缺少分析数据或图表类型'
+                message: '缺少分析数据'
             });
         }
         
         // 构建分析提示词
         let prompt = '';
+        let systemPrompt = '';
         
-        // 如果有自定义提示词，使用它；否则使用默认分析模板
+        // 根据模式设置不同的系统提示
+        if (isChartAnalysisMode) {
+            systemPrompt = '你是一位专业的数据分析师，专门擅长分析少数民族体育IP评估数据，能够提供深入的商业洞察和建议。你的回答应该专注于数据分析、图表解读和专业建议。';
+        } else {
+            systemPrompt = '你是一个友好、智能的AI助手，可以回答各种问题。虽然你对少数民族体育IP评估数据分析很专业，但你也能够进行日常对话，回答生活、学习、工作等各方面的问题。你的回答应该友好、准确、有帮助。';
+        }
+        
+        // 如果有自定义提示词，根据模式进行不同的处理
         if (analysisData.customPrompt) {
-            // 分析用户问题类型
             const userQuestion = analysisData.customPrompt.toLowerCase();
-            const isSystemQuestion = userQuestion.includes('模型') || userQuestion.includes('ai') || 
-                                   userQuestion.includes('系统') || userQuestion.includes('版本') ||
-                                   userQuestion.includes('什么ai') || userQuestion.includes('用的什么');
-            const isGeneralQuestion = userQuestion.includes('你好') || userQuestion.includes('帮我') ||
-                                    userQuestion.includes('可以') || userQuestion.includes('怎么');
             
-            if (isSystemQuestion) {
-                // 系统相关问题，直接回答
-                prompt = `用户询问关于AI系统的问题："${analysisData.customPrompt}"
+            if (isChartAnalysisMode) {
+                // 图表分析模式 - 专注于数据分析
+                const isSystemQuestion = userQuestion.includes('模型') || userQuestion.includes('ai') || 
+                                       userQuestion.includes('系统') || userQuestion.includes('版本') ||
+                                       userQuestion.includes('什么ai') || userQuestion.includes('用的什么');
+                
+                if (isSystemQuestion) {
+                    // 系统相关问题
+                    prompt = `用户询问关于AI系统的问题："${analysisData.customPrompt}"
 
 请简洁明确地回答用户的问题。如果问的是使用什么模型，回答当前使用的是GPT-4o语言模型。
-如果问的是系统功能，简要介绍这是一个少数民族体育IP评估分析系统，具有数据分析和AI对话功能。
+如果问的是系统功能，简要介绍这是一个少数民族体育IP评估分析系统，专注于数据分析和图表解读功能。
 
-回答要简短、直接、友好。`;
-            } else if (isGeneralQuestion && (!analysisData.evaluationResult || analysisData.selectedIPCount === 0)) {
-                // 一般性问题但没有数据
-                prompt = `用户说："${analysisData.customPrompt}"
+回答要简短、直接、专业。`;
+                } else if (!analysisData.evaluationResult || analysisData.selectedIPCount === 0) {
+                    // 图表分析模式但没有数据
+                    prompt = `用户在图表分析模式下询问："${analysisData.customPrompt}"
 
 当前系统状态：
 - 分析的IP数量: ${analysisData.selectedIPCount || 0}
 - 可用数据: ${analysisData.evaluationResult ? '有分析结果' : '暂无分析数据'}
+- 当前模式: 图表分析模式
 
-请友好地回应用户。如果用户需要数据分析但当前没有数据，建议用户先进行IP评估分析。
-如果是打招呼或一般性问题，给出友好回应并简单介绍系统功能。`;
-            } else {
-                // 数据分析相关问题
-                prompt = `你是一位专业的数据分析师，擅长分析少数民族民俗体育IP评估数据。
-            
-用户问题：${analysisData.customPrompt}
+请提醒用户当前处于图表分析模式，如果需要进行数据分析请先选择IP项目并运行分析。
+如果用户的问题与数据分析无关，建议切换到普通对话模式以获得更好的体验。`;
+                } else {
+                    // 有数据的图表分析
+                    prompt = `你是专业的数据分析师，当前处于图表分析模式。用户问题：${analysisData.customPrompt}
 
 基于以下数据回答用户的问题：
 
 ## 当前分析数据
 - 分析的IP数量: ${analysisData.selectedIPCount || 0}
 - 使用的指标数量: ${analysisData.indicatorCount || 0}
-- 可用图表类型: ${chartTypes.join(', ')}`;
+- 可用图表类型: ${chartTypes ? chartTypes.join(', ') : '无'}`;
 
-                // 添加具体的分析数据
-                if (analysisData.evaluationResult) {
-                    prompt += `\n\n### IP评分排名:`;
-                    analysisData.evaluationResult.evaluation.slice(0, 5).forEach((item, index) => {
-                        prompt += `\n${index + 1}. ${item.name}: ${item.score.toFixed(3)}分`;
-                    });
-                }
+                    // 添加具体的分析数据
+                    if (analysisData.evaluationResult) {
+                        prompt += `\n\n### IP评分排名:`;
+                        analysisData.evaluationResult.evaluation.slice(0, 5).forEach((item, index) => {
+                            prompt += `\n${index + 1}. ${item.name}: ${item.score.toFixed(3)}分`;
+                        });
+                    }
 
-                if (analysisData.weights && analysisData.weights.length > 0) {
-                    prompt += `\n\n### 关键指标权重:`;
-                    analysisData.weights.slice(0, 5).forEach((weight, index) => {
-                        prompt += `\n指标${index + 1}: ${(weight * 100).toFixed(2)}%`;
-                    });
-                }
+                    if (analysisData.weights && analysisData.weights.length > 0) {
+                        prompt += `\n\n### 关键指标权重:`;
+                        analysisData.weights.slice(0, 5).forEach((weight, index) => {
+                            prompt += `\n指标${index + 1}: ${(weight * 100).toFixed(2)}%`;
+                        });
+                    }
 
-                if (analysisData.neuralNetworkResult) {
-                    const nnData = analysisData.neuralNetworkResult;
-                    prompt += `\n\n### 神经网络训练结果:
+                    if (analysisData.neuralNetworkResult) {
+                        const nnData = analysisData.neuralNetworkResult;
+                        prompt += `\n\n### 神经网络训练结果:
 - 训练轮数: ${nnData.training_losses ? nnData.training_losses.length : 0}
 - 初始损失: ${nnData.training_losses ? nnData.training_losses[0]?.toFixed(4) : 'N/A'}
 - 最终损失: ${nnData.training_losses ? nnData.training_losses[nnData.training_losses.length - 1]?.toFixed(4) : 'N/A'}`;
-                }
+                    }
 
-                if (analysisData.pcaResult) {
-                    prompt += `\n\n### PCA降维分析:
+                    if (analysisData.pcaResult) {
+                        prompt += `\n\n### PCA降维分析:
 - 主成分数量: ${analysisData.pcaResult.n_components}
 - 总方差解释率: ${(analysisData.pcaResult.total_variance_explained * 100).toFixed(1)}%`;
-                }
+                    }
 
-                prompt += `\n\n请基于以上数据，针对用户的问题给出专业、准确、有针对性的回答。
-如果用户的问题与当前数据无关，请礼貌地说明并引导用户提出相关问题。
-回答要用中文，语言要专业但易懂。`;
+                    prompt += `\n\n请基于以上数据，针对用户的问题给出专业、准确、有针对性的回答。
+回答要用中文，语言要专业但易懂，重点关注数据分析和图表解读。`;
+                }
+            } else {
+                // 普通对话模式 - 可以回答任何问题
+                const isDataRelated = userQuestion.includes('数据') || userQuestion.includes('分析') || 
+                                     userQuestion.includes('图表') || userQuestion.includes('ip') ||
+                                     userQuestion.includes('评估') || userQuestion.includes('指标');
+                
+                if (isDataRelated && analysisData.evaluationResult && analysisData.selectedIPCount > 0) {
+                    // 数据相关问题且有数据
+                    prompt = `用户在普通对话模式下询问数据相关问题："${analysisData.customPrompt}"
+
+当前有以下分析数据可供参考：
+- 分析的IP数量: ${analysisData.selectedIPCount || 0}
+- 使用的指标数量: ${analysisData.indicatorCount || 0}
+- 可用图表类型: ${chartTypes ? chartTypes.join(', ') : '无'}
+
+简要数据概况：`;
+
+                    if (analysisData.evaluationResult) {
+                        prompt += `\n前3名IP: `;
+                        analysisData.evaluationResult.evaluation.slice(0, 3).forEach((item, index) => {
+                            prompt += `${index + 1}.${item.name}(${item.score.toFixed(2)}分) `;
+                        });
+                    }
+
+                    prompt += `\n\n请友好地回答用户的问题。如果需要更详细的数据分析，建议用户切换到图表分析模式。`;
+                } else {
+                    // 普通问题或无数据的情况
+                    prompt = `用户说："${analysisData.customPrompt}"
+
+请作为一个友好的AI助手回答用户的问题。你可以回答各种问题，包括但不限于：
+- 日常生活问题
+- 学习和工作建议  
+- 技术问题解答
+- 知识科普
+- 闲聊对话
+
+如果用户询问系统相关问题，可以介绍这是一个少数民族体育IP评估分析系统。
+如果用户想要进行数据分析，建议他们切换到图表分析模式并先进行数据分析。
+
+请给出友好、准确、有帮助的回答。`;
+                }
             }
         } else {
-            // 默认分析模板
+            // 默认分析模板（通常用于图表分析模式的默认分析）
             prompt = `你是一位专业的数据分析师，请分析以下少数民族民俗体育IP评估的分析结果：
 
 ## 分析概况
 - 分析的IP数量: ${analysisData.selectedIPCount || 0}
 - 使用的指标数量: ${analysisData.indicatorCount || 0}
-- 生成的图表类型: ${chartTypes.join(', ')}
+- 生成的图表类型: ${chartTypes ? chartTypes.join(', ') : '无'}
 
-## 详细数据
-`;
+## 详细数据`;
 
             // 添加具体的分析数据
             if (analysisData.evaluationResult) {
-                prompt += `\n### IP评分排名:
-`;
+                prompt += `\n\n### IP评分排名:`;
                 analysisData.evaluationResult.evaluation.slice(0, 5).forEach((item, index) => {
-                    prompt += `${index + 1}. ${item.name}: ${item.score.toFixed(3)}分\n`;
+                    prompt += `\n${index + 1}. ${item.name}: ${item.score.toFixed(3)}分`;
                 });
             }
 
             if (analysisData.weights && analysisData.weights.length > 0) {
-                prompt += `\n### 关键指标权重 (前5项):
-`;
+                prompt += `\n\n### 关键指标权重 (前5项):`;
                 analysisData.weights.slice(0, 5).forEach((weight, index) => {
-                    prompt += `指标${index + 1}: ${(weight * 100).toFixed(2)}%\n`;
+                    prompt += `\n指标${index + 1}: ${(weight * 100).toFixed(2)}%`;
                 });
             }
 
             if (analysisData.neuralNetworkResult) {
                 const nnData = analysisData.neuralNetworkResult;
-                prompt += `\n### 神经网络训练结果:
+                prompt += `\n\n### 神经网络训练结果:
 - 训练轮数: ${nnData.training_losses ? nnData.training_losses.length : 0}
 - 初始损失: ${nnData.training_losses ? nnData.training_losses[0]?.toFixed(4) : 'N/A'}
-- 最终损失: ${nnData.training_losses ? nnData.training_losses[nnData.training_losses.length - 1]?.toFixed(4) : 'N/A'}
-`;
+- 最终损失: ${nnData.training_losses ? nnData.training_losses[nnData.training_losses.length - 1]?.toFixed(4) : 'N/A'}`;
             }
 
             if (analysisData.pcaResult) {
-                prompt += `\n### PCA降维分析:
+                prompt += `\n\n### PCA降维分析:
 - 主成分数量: ${analysisData.pcaResult.n_components}
-- 总方差解释率: ${(analysisData.pcaResult.total_variance_explained * 100).toFixed(1)}%
-`;
+- 总方差解释率: ${(analysisData.pcaResult.total_variance_explained * 100).toFixed(1)}%`;
             }
 
-            prompt += `
-请从以下几个维度提供专业的分析见解：
+            prompt += `\n\n请从以下几个维度提供专业的分析见解：
 
 1. **整体表现分析**: 评价IP项目的整体表现水平和分布特点
 2. **关键指标解读**: 解释重要指标的影响和意义
@@ -1416,7 +1458,7 @@ router.post('/ai-analysis', async (req, res) => {
         // 尝试不同的模型
         for (const modelName of modelOptions) {
             try {
-                console.log(`尝试使用模型: ${modelName}`);
+                console.log(`尝试使用模型: ${modelName}, 模式: ${isChartAnalysisMode ? '图表分析' : '普通对话'}`);
                 
                 deepSeekResponse = await fetch('https://xiaoai.plus/v1/chat/completions', {
                     method: 'POST',
@@ -1429,14 +1471,14 @@ router.post('/ai-analysis', async (req, res) => {
                         messages: [
                             {
                                 role: 'system',
-                                content: '你是一位专业的数据分析师，擅长分析少数民族体育IP评估数据，能够提供深入的商业洞察和建议。'
+                                content: systemPrompt
                             },
                             {
                                 role: 'user',
                                 content: prompt
                             }
                         ],
-                        temperature: 0.7,
+                        temperature: isChartAnalysisMode ? 0.3 : 0.7, // 图表分析模式更严谨，普通模式更灵活
                         max_tokens: 2000
                     })
                 });
@@ -1474,6 +1516,7 @@ router.post('/ai-analysis', async (req, res) => {
             data: {
                 analysis,
                 model: 'deepseek-chat',
+                mode: isChartAnalysisMode ? 'chart-analysis' : 'normal-chat',
                 usage: deepSeekData.usage,
                 timestamp: new Date().toISOString()
             },

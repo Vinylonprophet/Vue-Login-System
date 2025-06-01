@@ -360,15 +360,16 @@ export const ipApi = {
     }),
 
   // AI分析接口
-  aiAnalysis: (analysisData: any, chartTypes: string[]) =>
+  aiAnalysis: (analysisData: any, chartTypes: string[], isChartAnalysisMode?: boolean) =>
     apiRequest<ApiResponse<{
       analysis: string;
       model: string;
+      mode?: string;
       usage: any;
       timestamp: string;
     }>>('/api/ip/ai-analysis', {
       method: 'POST',
-      body: JSON.stringify({ analysisData, chartTypes }),
+      body: JSON.stringify({ analysisData, chartTypes, isChartAnalysisMode }),
     })
 };
 

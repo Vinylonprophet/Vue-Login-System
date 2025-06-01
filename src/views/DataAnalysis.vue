@@ -2353,7 +2353,7 @@ const startAIAnalysis = async () => {
       .filter(tab => !tab.disabled)
       .map(tab => tab.title);
     
-    const response = await ipApi.aiAnalysis(analysisData, availableCharts);
+    const response = await ipApi.aiAnalysis(analysisData, availableCharts, isChartAnalysisMode.value);
     
     if (response.success) {
       aiAnalysisResult.value = response.data;
@@ -2529,7 +2529,7 @@ const performUnifiedAIAnalysis = async (prompt: string, isForPDF: boolean = fals
       .filter(tab => !tab.disabled)
       .map(tab => tab.title);
     
-    const response = await ipApi.aiAnalysis(analysisData, availableCharts);
+    const response = await ipApi.aiAnalysis(analysisData, availableCharts, isChartAnalysisMode.value);
     
     if (response.success && response.data?.analysis) {
       // 如果不是PDF调用，添加到聊天记录
@@ -2714,7 +2714,7 @@ const getChartAIAnalysis = async (chartId: string): Promise<string> => {
       .filter(tab => !tab.disabled)
       .map(tab => tab.title);
     
-    const response = await ipApi.aiAnalysis(analysisData, availableCharts);
+    const response = await ipApi.aiAnalysis(analysisData, availableCharts, isChartAnalysisMode.value);
     
     if (response.success && response.data?.analysis) {
       // 清理AI分析结果，移除HTML标签，保持简洁
