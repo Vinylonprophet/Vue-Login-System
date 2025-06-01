@@ -1407,7 +1407,7 @@ router.post('/ai-analysis', async (req, res) => {
 
         // 调用DeepSeek API - 尝试多个可能的模型名称
         const modelOptions = [
-            'gpt-4o',
+            'o3',
         ];
         
         let deepSeekResponse = null;

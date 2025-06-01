@@ -30,6 +30,13 @@
             </svg>
             <span>导出Excel</span>
           </button>
+          <button @click="toggleAIAnalysis" class="header-btn ai-btn" :disabled="!hasAnalysisResults">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <span>AI分析</span>
+          </button>
           </div>
           </div>
       
@@ -326,62 +333,73 @@
           <button @click="startNewChat" class="ai-control-btn" title="新对话">
             🆕
           </button>
-          <button @click="toggleAIMinimize" class="ai-control-btn" :title="isAIMinimized ? '展开对话框' : '收缩对话框'">
-            {{ isAIMinimized ? '⬆️' : '⬇️' }}
+          <button @click="toggleAIMinimize" class="ai-control-btn" title="最小化">
+            {{ isAIMinimized ? '📈' : '➖' }}
           </button>
+          <button @click="closeAIDialog" class="ai-control-btn" title="关闭">✕</button>
         </div>
       </div>
       
       <div v-show="!isAIMinimized" class="ai-chat-body">
-        <!-- 图表分析快捷按钮 - 只在图表分析模式下显示 -->
-        <div v-show="isChartAnalysisMode" class="ai-quick-actions">
-          <div class="ai-quick-title">快速分析图表:</div>
-          <div class="ai-quick-buttons">
-            <button @click="analyzeSpecificChart('fitness')" 
-                    :disabled="chartTabs.find(t => t.id === 'fitness')?.disabled"
-                    class="ai-quick-btn" title="适应度变化分析">
-              📈 适应度 <kbd>1</kbd>
+        <!-- 模式切换和快捷分析按钮 -->
+        <div class="ai-mode-section">
+          <!-- 模式切换按钮 -->
+          <div class="ai-mode-toggle">
+            <button @click="toggleChartAnalysisMode" class="ai-mode-btn" :class="{ 'active': isChartAnalysisMode }">
+              {{ isChartAnalysisMode ? '🔍 图表分析模式' : '💬 普通对话模式' }}
             </button>
-            <button @click="analyzeSpecificChart('scores')" 
-                    :disabled="chartTabs.find(t => t.id === 'scores')?.disabled"
-                    class="ai-quick-btn" title="IP评分分布分析">
-              📊 评分 <kbd>2</kbd>
-            </button>
-            <button @click="analyzeSpecificChart('radar')" 
-                    :disabled="chartTabs.find(t => t.id === 'radar')?.disabled"
-                    class="ai-quick-btn" title="指标权重雷达图分析">
-              🎯 权重 <kbd>3</kbd>
-            </button>
-            <button @click="analyzeSpecificChart('neural')" 
-                    :disabled="chartTabs.find(t => t.id === 'neural')?.disabled"
-                    class="ai-quick-btn" title="神经网络训练分析">
-              🧠 神经网络 <kbd>4</kbd>
-            </button>
-            <button @click="analyzeSpecificChart('importance')" 
-                    :disabled="chartTabs.find(t => t.id === 'importance')?.disabled"
-                    class="ai-quick-btn" title="特征重要性分析">
-              ⚖️ 特征重要性 <kbd>5</kbd>
-            </button>
-            <button @click="analyzeSpecificChart('shap')" 
-                    :disabled="chartTabs.find(t => t.id === 'shap')?.disabled"
-                    class="ai-quick-btn" title="SHAP模型解释分析">
-              🔍 SHAP <kbd>6</kbd>
-            </button>
-            <button @click="analyzeSpecificChart('pca')" 
-                    :disabled="chartTabs.find(t => t.id === 'pca')?.disabled"
-                    class="ai-quick-btn" title="PCA降维分析">
-              🔀 PCA <kbd>7</kbd>
-            </button>
-            <button @click="analyzeSpecificChart('cluster')" 
-                    :disabled="chartTabs.find(t => t.id === 'cluster')?.disabled"
-                    class="ai-quick-btn" title="聚类分析">
-              🎭 聚类 <kbd>8</kbd>
-            </button>
-            <button @click="analyzeSpecificChart('all')" 
-                    :disabled="!hasAnalysisResults"
-                    class="ai-quick-btn ai-analyze-all" title="全面综合分析">
-              🔍 全面分析 <kbd>A</kbd>
-            </button>
+          </div>
+          
+          <!-- 图表分析快捷按钮 - 只在图表分析模式下显示 -->
+          <div v-show="isChartAnalysisMode" class="ai-quick-actions">
+            <div class="ai-quick-title">快速分析图表:</div>
+            <div class="ai-quick-buttons">
+              <button @click="analyzeSpecificChart('fitness')" 
+                      :disabled="chartTabs.find(t => t.id === 'fitness')?.disabled"
+                      class="ai-quick-btn" title="适应度变化分析">
+                📈 适应度 <kbd>1</kbd>
+              </button>
+              <button @click="analyzeSpecificChart('scores')" 
+                      :disabled="chartTabs.find(t => t.id === 'scores')?.disabled"
+                      class="ai-quick-btn" title="IP评分分布分析">
+                📊 评分 <kbd>2</kbd>
+              </button>
+              <button @click="analyzeSpecificChart('radar')" 
+                      :disabled="chartTabs.find(t => t.id === 'radar')?.disabled"
+                      class="ai-quick-btn" title="指标权重雷达图分析">
+                🎯 权重 <kbd>3</kbd>
+              </button>
+              <button @click="analyzeSpecificChart('neural')" 
+                      :disabled="chartTabs.find(t => t.id === 'neural')?.disabled"
+                      class="ai-quick-btn" title="神经网络训练分析">
+                🧠 神经网络 <kbd>4</kbd>
+              </button>
+              <button @click="analyzeSpecificChart('importance')" 
+                      :disabled="chartTabs.find(t => t.id === 'importance')?.disabled"
+                      class="ai-quick-btn" title="特征重要性分析">
+                ⚖️ 特征重要性 <kbd>5</kbd>
+              </button>
+              <button @click="analyzeSpecificChart('shap')" 
+                      :disabled="chartTabs.find(t => t.id === 'shap')?.disabled"
+                      class="ai-quick-btn" title="SHAP模型解释分析">
+                🔍 SHAP <kbd>6</kbd>
+              </button>
+              <button @click="analyzeSpecificChart('pca')" 
+                      :disabled="chartTabs.find(t => t.id === 'pca')?.disabled"
+                      class="ai-quick-btn" title="PCA降维分析">
+                🔀 PCA <kbd>7</kbd>
+              </button>
+              <button @click="analyzeSpecificChart('cluster')" 
+                      :disabled="chartTabs.find(t => t.id === 'cluster')?.disabled"
+                      class="ai-quick-btn" title="聚类分析">
+                🎭 聚类 <kbd>8</kbd>
+              </button>
+              <button @click="analyzeSpecificChart('all')" 
+                      :disabled="!hasAnalysisResults"
+                      class="ai-quick-btn ai-analyze-all" title="全面综合分析">
+                🔍 全面分析 <kbd>A</kbd>
+              </button>
+            </div>
           </div>
         </div>
         
@@ -411,22 +429,6 @@
         <!-- 输入区域 -->
         <div class="ai-chat-input">
           <div class="ai-input-wrapper">
-            <!-- 模式切换圆按钮 -->
-            <div class="ai-mode-toggle-buttons">
-              <button @click="setNormalMode" 
-                      :class="{ 'active': !isChartAnalysisMode }"
-                      class="ai-mode-circle-btn"
-                      title="普通对话模式">
-                💬
-              </button>
-              <button @click="setChartMode" 
-                      :class="{ 'active': isChartAnalysisMode }"
-                      class="ai-mode-circle-btn"
-                      title="图表分析模式">
-                🔍
-              </button>
-            </div>
-            
             <input 
               v-model="userInput" 
               @keydown.enter="sendUserMessage"
@@ -2311,23 +2313,21 @@ const aiAnalysisLoading = ref(false);
 const aiAnalysisResult = ref<any>(null);
 const isChartAnalysisMode = ref(false); // 新增：图表分析模式开关
 
+const toggleAIAnalysis = () => {
+  showAIDialog.value = true;
+};
 
 const closeAIDialog = () => {
   showAIDialog.value = false;
 };
 
-
-const setNormalMode = () => {
+const toggleChartAnalysisMode = () => {
+  isChartAnalysisMode.value = !isChartAnalysisMode.value;
+  
   if (isChartAnalysisMode.value) {
-    isChartAnalysisMode.value = false;
-    addChatMessage('ai', '💬 已切换到普通对话模式！您可以问我任何问题，我会尽力为您提供帮助。');
-  }
-};
-
-const setChartMode = () => {
-  if (!isChartAnalysisMode.value) {
-    isChartAnalysisMode.value = true;
     addChatMessage('ai', '🔍 已切换到图表分析模式！在此模式下，我将专注于为您分析各种图表数据。请使用下方的快捷按钮或直接询问图表相关问题。');
+  } else {
+    addChatMessage('ai', '💬 已切换到普通对话模式！您可以问我任何问题，我会尽力为您提供帮助。');
   }
 };
 
@@ -3108,8 +3108,18 @@ const startNewChat = () => {
   color: #999;
 }
 
+.header-btn.ai-btn {
+  background: linear-gradient(135deg, #ff7b72 0%, #ff6b6b 100%);
+}
 
+.header-btn.ai-btn:hover {
+  background: linear-gradient(135deg, #ff5b52 0%, #ff4b4b 100%);
+}
 
+.header-btn.ai-btn:disabled {
+  background: linear-gradient(135deg, #d6d6d6 0%, #e9e9e9 100%);
+  color: #999;
+}
 
 .btn-icon {
   width: 18px;
@@ -4624,110 +4634,5 @@ const startNewChat = () => {
 .ai-mode-btn.active {
   background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
   box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
-}
-
-/* 优化模式切换UI */
-.ai-mode-section {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid #f1f3f4 !important;
-  background: #fafbfc !important;
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  margin-bottom: 0 !important;
-}
-
-.ai-mode-toggle {
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  width: 100% !important;
-}
-
-.ai-mode-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-  color: white !important;
-  border: none !important;
-  padding: 8px 20px !important;
-  border-radius: 20px !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
-  cursor: pointer !important;
-  transition: all 0.2s ease !important;
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2) !important;
-  margin: 0 !important;
-}
-
-.ai-mode-btn:hover {
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
-  transform: translateY(-1px) !important;
-  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3) !important;
-}
-
-.ai-mode-btn.active {
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%) !important;
-  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3) !important;
-}
-
-.ai-mode-circle-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid #667eea;
-  background: transparent;
-  color: #667eea;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-right: 10px;
-}
-
-.ai-mode-circle-btn.active {
-  background: #667eea;
-  color: white;
-}
-
-.ai-mode-toggle-buttons {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-right: 12px;
-}
-
-.ai-mode-circle-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid #e9ecef;
-  background: white;
-  color: #667eea;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.ai-mode-circle-btn:hover {
-  border-color: #667eea;
-  transform: scale(1.05);
-  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.2);
-}
-
-.ai-mode-circle-btn.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-color: #667eea;
-  color: white;
-  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
-}
-
-/* 调整输入框以适应左边的按钮 */
-.ai-input-wrapper {
-  display: flex !important;
-  align-items: center !important;
-  gap: 0 !important;
 }
 </style> 
