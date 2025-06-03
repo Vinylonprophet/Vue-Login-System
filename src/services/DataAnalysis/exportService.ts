@@ -107,16 +107,16 @@ export class ExportService {
       tempContainer.style.backgroundColor = 'white';
       document.body.appendChild(tempContainer);
       
-      // 获取AI生成的各种内容
-      const backgroundContent = await this.getAIContent('background', selectedIPs.length, filteredThirdIndicators.length, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, isChartAnalysisMode, setLoadingText, addLog);
-      const methodContent = await this.getAIContent('method', selectedIPs.length, filteredThirdIndicators.length, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, isChartAnalysisMode, setLoadingText, addLog);
-      const abstractContent = await this.getAIContent('abstract', selectedIPs.length, filteredThirdIndicators.length, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, isChartAnalysisMode, setLoadingText, addLog);
+      // 获取AI生成的各种内容 - 传入selectedChartIds确保只基于选中的图表生成内容
+      const backgroundContent = await this.getAIContent('background', selectedIPs.length, filteredThirdIndicators.length, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, selectedChartIds, isChartAnalysisMode, setLoadingText, addLog);
+      const methodContent = await this.getAIContent('method', selectedIPs.length, filteredThirdIndicators.length, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, selectedChartIds, isChartAnalysisMode, setLoadingText, addLog);
+      const abstractContent = await this.getAIContent('abstract', selectedIPs.length, filteredThirdIndicators.length, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, selectedChartIds, isChartAnalysisMode, setLoadingText, addLog);
       
       // 创建PDF内容结构
-      this.createPDFContent(tempContainer, selectedIPs.length, filteredThirdIndicators.length, abstractContent, backgroundContent, methodContent, validCharts);
+      this.createPDFContent(tempContainer, selectedIPs.length, filteredThirdIndicators.length, abstractContent, backgroundContent, methodContent, validCharts, selectedChartIds, chartTabs);
       
-      // 获取实证分析引言
-      const analysisIntroContent = await this.getAIContent('analysis_intro', selectedIPs.length, filteredThirdIndicators.length, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, isChartAnalysisMode, setLoadingText, addLog);
+      // 获取实证分析引言 - 只基于选中的图表
+      const analysisIntroContent = await this.getAIContent('analysis_intro', selectedIPs.length, filteredThirdIndicators.length, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, selectedChartIds, isChartAnalysisMode, setLoadingText, addLog);
       
       const analysisHeaderSection = document.createElement('div');
       analysisHeaderSection.style.pageBreakBefore = 'always';
@@ -137,16 +137,16 @@ export class ExportService {
         shapResult,
         pcaResult,
         advancedClusterResult,
-        advancedClusterImage,
         filteredThirdIndicators,
         chartTabs,
+        selectedChartIds, // 传入选中的图表ID
         isChartAnalysisMode,
         setLoadingText,
         addLog
       );
       
-      // 添加其他章节
-      await this.addPDFSections(tempContainer, selectedIPs.length, filteredThirdIndicators.length, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, isChartAnalysisMode, setLoadingText, addLog);
+      // 添加其他章节 - 只基于选中的图表
+      await this.addPDFSections(tempContainer, selectedIPs.length, filteredThirdIndicators.length, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, selectedChartIds, isChartAnalysisMode, setLoadingText, addLog);
       
       // 恢复原来的激活图表
       activeChart.value = originalActiveChart;
@@ -178,12 +178,16 @@ export class ExportService {
     pcaResult: any,
     advancedClusterResult: any,
     chartTabs: any[],
+    selectedChartIds: string[], // 新增参数：选中的图表ID列表
     isChartAnalysisMode: boolean,
     setLoadingText: (text: string) => void,
     addLog: (message: string) => void
   ): Promise<string> {
     addLog(`🤖 正在生成${this.getContentTypeName(contentType)}...`);
     setLoadingText(`正在生成${this.getContentTypeName(contentType)}...`);
+    
+    // 只传递用户选中的图表信息给AI
+    const selectedChartTabs = chartTabs.filter(tab => selectedChartIds.includes(tab.id));
     
     return await AIService.getAIGeneratedContent(
       contentType,
@@ -195,7 +199,7 @@ export class ExportService {
       shapResult,
       pcaResult,
       advancedClusterResult,
-      chartTabs,
+      selectedChartTabs, // 传递过滤后的图表列表
       isChartAnalysisMode
     );
   }
@@ -213,7 +217,7 @@ export class ExportService {
     return nameMap[contentType] || contentType;
   }
 
-  // 创建PDF内容结构
+  // 创建PDF主要内容
   private static createPDFContent(
     tempContainer: HTMLElement,
     ipCount: number,
@@ -221,20 +225,25 @@ export class ExportService {
     abstractContent: string,
     backgroundContent: string,
     methodContent: string,
-    validCharts: any[]
+    validCharts: any[],
+    selectedChartIds: string[], // 新增参数
+    chartTabs: any[] // 新增参数
   ) {
-    // 创建PDF标题页
+    // 添加标题页和摘要
     const titleSection = document.createElement('div');
     titleSection.innerHTML = `
       <div style="text-align: center; margin-bottom: 60px; padding: 40px 0;">
-        <h1 style="font-size: 28px; color: #2c3e50; margin-bottom: 30px; font-weight: bold; line-height: 1.4;">
+        <h1 style="font-size: 32px; color: #2c3e50; margin-bottom: 40px; font-weight: bold; line-height: 1.4;">
           基于多维评价体系的少数民族体育IP<br>品牌塑造路径研究
         </h1>
-        <div style="margin: 30px 0; font-size: 16px; color: #666; line-height: 1.8;">
-          <p><strong>研究时间：</strong>${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        <div style="font-size: 18px; color: #7f8c8d; margin-bottom: 60px;">
+          ——基于遗传算法与机器学习的实证分析
+        </div>
+        <div style="background: #f8f9fa; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin: 40px 0; text-align: left;">
+          <h3 style="color: #3498db; margin-bottom: 20px; font-size: 20px;">研究概况</h3>
           <p><strong>样本规模：</strong>${ipCount}个体育IP项目</p>
           <p><strong>评价指标：</strong>${indicatorCount}项核心指标</p>
-          <p><strong>分析方法：</strong>遗传算法优化、神经网络建模、SHAP解释性分析</p>
+          <p><strong>分析方法：</strong>${validCharts.length}种分析方法（${validCharts.map(chart => chart.title).join('、')}）</p>
         </div>
       </div>
       
@@ -247,20 +256,15 @@ export class ExportService {
     `;
     tempContainer.appendChild(titleSection);
     
-    // 添加目录
+    // 添加动态生成的目录
+    const dynamicTocContent = AIService.generateDynamicTableOfContents(selectedChartIds, chartTabs);
     const tocSection = document.createElement('div');
     tocSection.style.pageBreakBefore = 'always';
     tocSection.innerHTML = `
       <div style="margin-bottom: 40px;">
         <h2 style="font-size: 22px; color: #2c3e50; margin-bottom: 30px; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px;">目录</h2>
         <div style="line-height: 2.0; font-size: 14px;">
-          <p>1. 研究背景与意义 ......................................................... 3</p>
-          <p>2. 研究方法与数据来源 .................................................... 4</p>
-          <p>3. 评价体系构建与算法优化 ............................................... 5</p>
-          <p>4. 实证分析结果 ......................................................... 6</p>
-          <p>5. 品牌塑造路径设计 ..................................................... ${6 + validCharts.length}</p>
-          <p>6. 政策建议与实践指导 ................................................... ${7 + validCharts.length}</p>
-          <p>7. 结论与展望 .......................................................... ${8 + validCharts.length}</p>
+          ${dynamicTocContent}
         </div>
       </div>
     `;
@@ -297,14 +301,17 @@ export class ExportService {
     shapResult: any,
     pcaResult: any,
     advancedClusterResult: any,
-    advancedClusterImage: string,
     filteredThirdIndicators: string[],
     chartTabs: any[],
+    selectedChartIds: string[], // 新增参数
     isChartAnalysisMode: boolean,
     setLoadingText: (text: string) => void,
     addLog: (message: string) => void
   ) {
     let processedCharts = 0;
+    
+    // 只传递选中的图表给AI分析
+    const selectedChartTabs = chartTabs.filter(tab => selectedChartIds.includes(tab.id));
     
     for (const chart of validCharts) {
       try {
@@ -349,8 +356,9 @@ export class ExportService {
               advancedClusterResult,
               validCharts.length, // selectedIPCount
               filteredThirdIndicators.length,
-              chartTabs,
-              isChartAnalysisMode
+              selectedChartTabs, // 只传递选中的图表
+              isChartAnalysisMode,
+              selectedChartIds // 传递选中图表ID列表
             );
             addLog(`✅ 学术分析已生成: ${chineseTitle}`);
           } catch (error) {
@@ -359,10 +367,10 @@ export class ExportService {
           }
           
           // 创建学术化的图表分析段落
-          this.addChartSectionToPDF(tempContainer, chart, chineseTitle, imageDataUrl, academicAnalysis, processedCharts);
+          this.addChartSectionToPDF(tempContainer, chart, chineseTitle, imageDataUrl, academicAnalysis, processedCharts, selectedChartIds);
           addLog(`✅ 已添加学术分析到论文: ${chineseTitle}`);
         } else {
-          this.addFailedChartSectionToPDF(tempContainer, chart, chineseTitle, processedCharts, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, filteredThirdIndicators.length, chartTabs, isChartAnalysisMode, addLog);
+          this.addFailedChartSectionToPDF(tempContainer, chart, chineseTitle, processedCharts, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, filteredThirdIndicators.length, selectedChartTabs, isChartAnalysisMode, addLog, selectedChartIds);
         }
       } catch (error) {
         const chineseTitle = chart.title;
@@ -619,37 +627,43 @@ export class ExportService {
     return imageDataUrl;
   }
 
-  // 添加图表章节到PDF
+  // 添加图表分析章节到PDF
   private static addChartSectionToPDF(
     tempContainer: HTMLElement,
     chart: any,
     chineseTitle: string,
     imageDataUrl: string,
     academicAnalysis: string,
-    processedCharts: number
+    processedCharts: number,
+    selectedChartIds: string[] // 新增参数
   ) {
     const chartSection = document.createElement('div');
-    chartSection.style.marginBottom = '35px';
+    chartSection.style.pageBreakBefore = 'always';
+    
+    // 使用动态生成的章节标题
+    const dynamicSectionTitle = AIService.getDynamicSectionTitle(chart.id, selectedChartIds);
+    
     chartSection.innerHTML = `
-      <div style="margin-bottom: 25px;">
-        <h3 style="font-size: 16px; color: #2c3e50; margin-bottom: 15px;">${AIService.getAcademicSectionTitle(chart.id)}</h3>
+      <div style="margin-bottom: 40px;">
+        <h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">
+          ${dynamicSectionTitle}
+        </h2>
         
-        <div style="text-align: center; margin: 20px 0;">
-          <img src="${imageDataUrl}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
-          <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px; font-style: italic;">
-            图${processedCharts}. ${chineseTitle}
-          </p>
+        <div style="text-align: center; margin: 30px 0;">
+          <img src="${imageDataUrl}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+          <p style="font-size: 12px; color: #666; margin-top: 10px; text-align: center;">图 4.${processedCharts} ${chineseTitle}</p>
         </div>
         
-        <div style="text-align: justify; line-height: 1.8; margin-top: 15px;">
+        <div style="text-align: justify; line-height: 1.8; font-size: 14px; color: #333;">
           ${academicAnalysis}
         </div>
       </div>
     `;
+    
     tempContainer.appendChild(chartSection);
   }
 
-  // 添加失败图表章节到PDF
+  // 添加失败图表的占位内容
   private static async addFailedChartSectionToPDF(
     tempContainer: HTMLElement,
     chart: any,
@@ -661,63 +675,60 @@ export class ExportService {
     pcaResult: any,
     advancedClusterResult: any,
     indicatorCount: number,
-    chartTabs: any[],
+    chartTabs: any[], // 这里已经是过滤后的选中图表列表
     isChartAnalysisMode: boolean,
-    addLog: (message: string) => void
+    addLog: (message: string) => void,
+    selectedChartIds: string[] // 新增参数
   ) {
-    addLog(`❌ 最终未能获取图表: ${chineseTitle} - 将添加重试提示`);
+    const chartSection = document.createElement('div');
+    chartSection.style.pageBreakBefore = 'always';
     
-    let academicAnalysis = '';
+    // 使用动态生成的章节标题
+    const dynamicSectionTitle = AIService.getDynamicSectionTitle(chart.id, selectedChartIds);
+    
+    // 尝试获取文字分析作为替代
+    let fallbackAnalysis = '';
     try {
-      academicAnalysis = await AIService.getAcademicAnalysis(
+      addLog(`📝 图表 "${chineseTitle}" 截图失败，尝试生成文字分析作为替代...`);
+      fallbackAnalysis = await AIService.getAcademicAnalysis(
         chart.id,
         evaluationResult,
         neuralNetworkResult,
         shapResult,
         pcaResult,
         advancedClusterResult,
-        processedCharts,
+        chartTabs.length, // selectedIPCount
         indicatorCount,
-        chartTabs,
-        isChartAnalysisMode
+        chartTabs, // 已经是过滤后的选中图表
+        isChartAnalysisMode,
+        selectedChartIds // 传递选中图表ID列表
       );
-      addLog(`✅ 文本分析已生成: ${chineseTitle}`);
+      addLog(`✅ 文字分析已生成作为 "${chineseTitle}" 的替代内容`);
     } catch (error) {
-      console.warn(`文本分析失败 for ${chineseTitle}:`, error);
-      academicAnalysis = AIService.getDefaultAcademicAnalysis(chart.id);
+      console.warn(`文字分析也失败 for ${chineseTitle}:`, error);
+      fallbackAnalysis = AIService.getDefaultAcademicAnalysis(chart.id);
+      addLog(`⚠️ 使用默认分析内容替代: ${chineseTitle}`);
     }
     
-    const chartSection = document.createElement('div');
-    chartSection.style.marginBottom = '35px';
     chartSection.innerHTML = `
-      <div style="margin-bottom: 25px;">
-        <h3 style="font-size: 16px; color: #2c3e50; margin-bottom: 15px;">${AIService.getAcademicSectionTitle(chart.id)}</h3>
+      <div style="margin-bottom: 40px;">
+        <h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">
+          ${dynamicSectionTitle}
+        </h2>
         
-        <div style="padding: 30px; background: linear-gradient(135deg, #ffebe6 0%, #fff2e6 100%); border-radius: 12px; border: 2px solid #ff6b6b; text-align: center; margin: 20px 0; box-shadow: 0 4px 8px rgba(255,107,107,0.2);">
-          <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
-          <h4 style="color: #e74c3c; margin: 10px 0; font-size: 16px; font-weight: bold;">图表获取失败</h4>
-          <p style="margin: 8px 0; font-size: 14px; color: #666; line-height: 1.5;">
-            <strong>建议解决方案：</strong><br>
-            1. 确保所有图表在界面中完全显示<br>
-            2. 等待更长时间后重新导出<br>
-            3. 刷新页面重新分析后导出
-          </p>
-          <p style="margin: 8px 0; font-size: 12px; color: #999; font-style: italic;">
-            图表类型：${chineseTitle} | Canvas ID: ${chart.id}Chart
-          </p>
+        <div style="text-align: center; margin: 30px 0; padding: 40px; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 8px;">
+          <div style="font-size: 48px; color: #6c757d; margin-bottom: 15px;">📊</div>
+          <p style="color: #6c757d; font-size: 14px; margin-bottom: 8px;">图表生成失败</p>
+          <p style="color: #6c757d; font-size: 12px;">图 4.${processedCharts} ${chineseTitle}</p>
         </div>
         
-        <div style="text-align: justify; line-height: 1.8; margin-top: 15px;">
-          <div style="padding: 15px; background: #f8f9fa; border-left: 4px solid #007bff; margin-bottom: 15px;">
-            <strong style="color: #007bff;">💡 基于数据的分析结果：</strong>
-          </div>
-          ${academicAnalysis}
+        <div style="text-align: justify; line-height: 1.8; font-size: 14px; color: #333;">
+          ${fallbackAnalysis}
         </div>
       </div>
     `;
-    tempContainer.appendChild(chartSection);
     
-    addLog(`⚠️ 已添加重试提示和分析到论文: ${chineseTitle}`);
+    tempContainer.appendChild(chartSection);
   }
 
   // 添加其他PDF章节
@@ -731,12 +742,13 @@ export class ExportService {
     pcaResult: any,
     advancedClusterResult: any,
     chartTabs: any[],
+    selectedChartIds: string[], // 新增参数
     isChartAnalysisMode: boolean,
     setLoadingText: (text: string) => void,
     addLog: (message: string) => void
   ) {
-    // 品牌塑造路径章节
-    const brandingPathContent = await this.getAIContent('branding_path', ipCount, indicatorCount, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, isChartAnalysisMode, setLoadingText, addLog);
+    // 品牌塑造路径章节 - 只基于选中的图表
+    const brandingPathContent = await this.getAIContent('branding_path', ipCount, indicatorCount, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, selectedChartIds, isChartAnalysisMode, setLoadingText, addLog);
     
     const brandingPathSection = document.createElement('div');
     brandingPathSection.style.pageBreakBefore = 'always';
@@ -747,8 +759,8 @@ export class ExportService {
     `;
     tempContainer.appendChild(brandingPathSection);
     
-    // 政策建议章节
-    const policySuggestionsContent = await this.getAIContent('policy_suggestions', ipCount, indicatorCount, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, isChartAnalysisMode, setLoadingText, addLog);
+    // 政策建议章节 - 只基于选中的图表
+    const policySuggestionsContent = await this.getAIContent('policy_suggestions', ipCount, indicatorCount, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, selectedChartIds, isChartAnalysisMode, setLoadingText, addLog);
     
     const policySection = document.createElement('div');
     policySection.style.pageBreakBefore = 'always';
@@ -759,8 +771,8 @@ export class ExportService {
     `;
     tempContainer.appendChild(policySection);
     
-    // 结论章节
-    const conclusionContent = await this.getAIContent('conclusion', ipCount, indicatorCount, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, isChartAnalysisMode, setLoadingText, addLog);
+    // 结论章节 - 只基于选中的图表
+    const conclusionContent = await this.getAIContent('conclusion', ipCount, indicatorCount, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, chartTabs, selectedChartIds, isChartAnalysisMode, setLoadingText, addLog);
     
     const conclusionSection = document.createElement('div');
     conclusionSection.style.pageBreakBefore = 'always';

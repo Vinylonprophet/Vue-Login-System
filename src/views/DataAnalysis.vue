@@ -304,7 +304,6 @@
           <button @click="selectAllCharts" class="btn btn-secondary">
             {{ selectedChartsForExport.length === availableEnabledCharts.length ? '取消全选' : '全选' }}
           </button>
-          <button @click="closeChartSelectionDialog" class="btn btn-secondary">取消</button>
           <button 
             @click="confirmExportPDF" 
             class="btn btn-primary"
@@ -1063,7 +1062,7 @@ const renderSHAPChart = () => {
           const yOffset = baseOffset + randomOffset;
           
           swarmData.push({
-            x: featureIndex,
+            x: shapResult.value.feature_names[featureIndex] || `指标${featureIndex + 1}`, // 使用指标名称作为x坐标
             y: shapValue + yOffset,
             originalValue: shapValue,
             ip: explanation.name,
@@ -1128,21 +1127,16 @@ const renderSHAPChart = () => {
         },
         scales: {
           x: {
-            type: 'linear',
-            position: 'bottom',
+            type: 'category' as const, // 改为category类型以显示文本标签
+            position: 'bottom' as const,
             title: {
               display: true,
-              text: '特征索引'
+              text: '指标名称'
             },
             ticks: {
-              stepSize: 1,
-              callback: function(value: any) {
-                const index = Math.round(value);
-                return shapResult.value.feature_names[index] || '';
-              }
-            },
-            min: -0.5,
-            max: shapResult.value.feature_names.length - 0.5
+              maxRotation: 45, // 旋转45度以避免标签重叠
+              minRotation: 45
+            }
           },
           y: {
             title: {
@@ -1810,111 +1804,22 @@ const getChineseChartTitle = (chartId: string): string => {
 // Excel导出功能
 const getAcademicAnalysis = async (chartId: string): Promise<string> => {
   try {
-    let analysisPrompt = '';
-    
-    // 准备图表特定的数据上下文
-    let chartSpecificData = '';
-    
-    switch (chartId) {
-      case 'fitness':
-        if (evaluationResult.value?.fitnessHistory) {
-          const lastGen = evaluationResult.value.fitnessHistory.length;
-          const finalFitness = evaluationResult.value.fitnessHistory[lastGen - 1];
-          const avgFinalFitness = finalFitness.reduce((a, b) => a + b, 0) / finalFitness.length;
-          chartSpecificData = `迭代次数：${lastGen}代，最终平均适应度：${avgFinalFitness.toFixed(4)}`;
-        }
-        analysisPrompt = `基于遗传算法适应度曲线图，分析算法的收敛过程。${chartSpecificData}。只分析这个图表显示的信息，不要提及其他图表。要求：专注于适应度变化趋势、收敛速度、优化效果。字数控制在300-500字。`;
-        break;
-        
-      case 'scores':
-        if (evaluationResult.value?.evaluation) {
-          const scores = evaluationResult.value.evaluation.map(e => e.score);
-          const maxScore = Math.max(...scores);
-          const minScore = Math.min(...scores);
-          chartSpecificData = `IP数量：${scores.length}个，最高分：${maxScore.toFixed(2)}，最低分：${minScore.toFixed(2)}`;
-        }
-        analysisPrompt = `基于IP评分分布柱状图，分析各IP的得分情况。${chartSpecificData}。只分析评分分布特征，不要提及其他分析方法。要求：专注于分数分布、差异性、优劣势项目识别。字数控制在300-500字。`;
-        break;
-        
-      case 'radar':
-        if (evaluationResult.value?.weights) {
-          const topN = 5;
-          const sortedWeights = evaluationResult.value.weights
-            .map((w, i) => ({ weight: w, index: i }))
-            .sort((a, b) => b.weight - a.weight)
-            .slice(0, topN);
-          chartSpecificData = `最重要的${topN}个指标权重：${sortedWeights.map(w => w.weight.toFixed(4)).join(', ')}`;
-        }
-        analysisPrompt = `基于指标权重雷达图，分析各维度的相对重要性。${chartSpecificData}。只分析权重分布，不要提及其他图表。要求：专注于权重大小、指标重要性排序、维度平衡性。字数控制在300-500字。`;
-        break;
-        
-      case 'neural':
-        if (neuralNetworkResult.value?.training_losses) {
-          const losses = neuralNetworkResult.value.training_losses;
-          const initialLoss = losses[0];
-          const finalLoss = losses[losses.length - 1];
-          chartSpecificData = `训练轮次：${losses.length}，初始损失：${initialLoss.toFixed(4)}，最终损失：${finalLoss.toFixed(4)}`;
-        }
-        analysisPrompt = `基于神经网络训练损失曲线，分析模型的训练过程。${chartSpecificData}。只分析损失变化，不要提及其他分析。要求：专注于损失下降趋势、收敛情况、训练效果评估。字数控制在300-500字。`;
-        break;
-        
-      case 'importance':
-        if (neuralNetworkResult.value?.feature_importance) {
-          const importance = neuralNetworkResult.value.feature_importance;
-          const maxImportance = Math.max(...importance);
-          const topFeatures = importance
-            .map((imp: number, i: number) => ({ imp, index: i }))
-            .sort((a: {imp: number}, b: {imp: number}) => b.imp - a.imp)
-            .slice(0, 3);
-          chartSpecificData = `特征数量：${importance.length}，最高重要性：${maxImportance.toFixed(4)}`;
-        }
-        analysisPrompt = `基于特征重要性柱状图，分析各特征对模型的贡献。${chartSpecificData}。只分析特征重要性，不要提及其他内容。要求：专注于重要特征识别、特征贡献度差异、关键因素分析。字数控制在300-500字。`;
-        break;
-        
-      case 'shap':
-        if (shapResult.value?.ip_explanations) {
-          const ipCount = shapResult.value.ip_explanations.length;
-          chartSpecificData = `分析样本数：${ipCount}个IP`;
-        }
-        analysisPrompt = `基于SHAP蜂群图，分析模型的可解释性。${chartSpecificData}。只分析SHAP值分布，不要提及其他方法。要求：专注于特征贡献度、正负影响、个体差异性。字数控制在300-500字。`;
-        break;
-        
-      case 'pca':
-        if (pcaResult.value?.explained_variance_ratio) {
-          const var1 = (pcaResult.value.explained_variance_ratio[0] * 100).toFixed(1);
-          const var2 = (pcaResult.value.explained_variance_ratio[1] * 100).toFixed(1);
-          chartSpecificData = `PC1方差贡献：${var1}%，PC2方差贡献：${var2}%`;
-        }
-        analysisPrompt = `基于PCA降维散点图，分析数据的主成分结构。${chartSpecificData}。只分析降维结果，不要提及其他分析。要求：专注于主成分解释、数据分布模式、样本聚集特征。字数控制在300-500字。`;
-        break;
-        
-      case 'cluster':
-        if (advancedClusterResult.value?.clustering_results) {
-          const clusterCount = new Set(advancedClusterResult.value.clustering_results.map((r: any) => r.cluster)).size;
-          chartSpecificData = `聚类数量：${clusterCount}个`;
-        }
-        analysisPrompt = `基于聚类分析图（含凸包），分析样本的分组特征。${chartSpecificData}。只分析聚类结果，不要提及其他内容。要求：专注于聚类质量、分组特征、类间差异。字数控制在300-500字。`;
-        break;
-        
-      default:
-        return getDefaultAcademicAnalysis(chartId);
-    }
-    
-    // 使用AI分析，传入更精确的提示
-    const analysisResponse = await performUnifiedAIAnalysis(analysisPrompt, true);
-    
-    // 清理并学术化处理
-    return analysisResponse
-      .replace(/<[^>]*>/g, '') // 移除HTML标签
-      .replace(/\*\*/g, '') // 移除粗体标记
-      .replace(/###?\s*/g, '') // 移除标题标记
-      .replace(/AI分析|人工智能|智能分析|机器学习模型/g, '计算模型')
-      .replace(/通过分析|可以看出|显示了/g, '分析结果表明')
-      .replace(/建议|推荐/g, '研究发现')
-      .trim();
+    return await AIService.getAcademicAnalysis(
+      chartId,
+      evaluationResult.value,
+      neuralNetworkResult.value,
+      shapResult.value,
+      pcaResult.value,
+      advancedClusterResult.value,
+      selectedIPs.value.length,
+      filteredThirdIndicators.value.length,
+      chartTabs.value.filter(tab => !tab.disabled),
+      isChartAnalysisMode.value,
+      chartTabs.value.filter(tab => !tab.disabled).map(tab => tab.id) // 传递选中图表ID列表
+    );
   } catch (error) {
     console.error(`学术分析失败 for chart ${chartId}:`, error);
-    return getDefaultAcademicAnalysis(chartId);
+    return AIService.getDefaultAcademicAnalysis(chartId);
   }
 };
 
@@ -4062,7 +3967,7 @@ const updateFilteredIndicators = async () => {
   display: flex;
   gap: 10px;
   justify-content: center;
-  margin-top: 15px;
+  margin: 15px;
 }
 
 .btn {

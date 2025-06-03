@@ -295,7 +295,7 @@ export class ChartService {
             const yOffset = baseOffset + randomOffset;
             
             swarmData.push({
-              x: featureIndex,
+              x: shapResult.feature_names[featureIndex] || `指标${featureIndex + 1}`,
               y: shapValue + yOffset,
               originalValue: shapValue,
               ip: explanation.name,
@@ -360,21 +360,17 @@ export class ChartService {
           },
           scales: {
             x: {
-              type: 'linear',
-              position: 'bottom',
+              type: 'category' as const,
+              position: 'bottom' as const,
               title: {
                 display: true,
-                text: '特征索引'
+                text: '指标名称'
               },
+              labels: shapResult.feature_names || [],
               ticks: {
-                stepSize: 1,
-                callback: function(value: any) {
-                  const index = Math.round(value);
-                  return shapResult.feature_names[index] || '';
-                }
-              },
-              min: -0.5,
-              max: shapResult.feature_names.length - 0.5
+                maxRotation: 45,
+                minRotation: 45
+              }
             },
             y: {
               title: {

@@ -1,4 +1,4 @@
-import { ref, nextTick } from 'vue';
+import { nextTick } from 'vue';
 import { ipApi } from '../../utils/api';
 
 export interface ChatMessage {
@@ -188,11 +188,19 @@ export class AIService {
     selectedIPCount: number,
     indicatorCount: number,
     chartTabs: any[],
-    isChartAnalysisMode: boolean
+    isChartAnalysisMode: boolean,
+    selectedChartIds?: string[]
   ): Promise<string> {
     try {
       let analysisPrompt = '';
+      
+      // 准备图表特定的数据上下文
       let chartSpecificData = '';
+      
+      // 获取动态章节标题（如果提供了selectedChartIds）
+      const sectionTitle = selectedChartIds ? 
+        this.getDynamicSectionTitle(chartId, selectedChartIds) : 
+        this.getAcademicSectionTitle(chartId);
       
       switch (chartId) {
         case 'fitness':
@@ -202,7 +210,7 @@ export class AIService {
             const avgFinalFitness = finalFitness.reduce((a: number, b: number) => a + b, 0) / finalFitness.length;
             chartSpecificData = `迭代次数：${lastGen}代，最终平均适应度：${avgFinalFitness.toFixed(4)}`;
           }
-          analysisPrompt = `基于遗传算法适应度曲线图，分析算法的收敛过程。${chartSpecificData}。只分析这个图表显示的信息，不要提及其他图表。要求：专注于适应度变化趋势、收敛速度、优化效果。字数控制在300-500字。`;
+          analysisPrompt = `请为学术论文章节"${sectionTitle}"撰写分析内容。基于遗传算法适应度曲线图，分析算法的收敛过程。${chartSpecificData}。只分析这个图表显示的信息，不要提及其他图表。要求：专注于适应度变化趋势、收敛速度、优化效果。字数控制在300-500字。`;
           break;
           
         case 'scores':
@@ -212,7 +220,7 @@ export class AIService {
             const minScore = Math.min(...scores);
             chartSpecificData = `IP数量：${scores.length}个，最高分：${maxScore.toFixed(2)}，最低分：${minScore.toFixed(2)}`;
           }
-          analysisPrompt = `基于IP评分分布柱状图，分析各IP的得分情况。${chartSpecificData}。只分析评分分布特征，不要提及其他分析方法。要求：专注于分数分布、差异性、优劣势项目识别。字数控制在300-500字。`;
+          analysisPrompt = `请为学术论文章节"${sectionTitle}"撰写分析内容。基于IP评分分布柱状图，分析各IP的得分情况。${chartSpecificData}。只分析评分分布特征，不要提及其他分析方法。要求：专注于分数分布、差异性、优劣势项目识别。字数控制在300-500字。`;
           break;
           
         case 'radar':
@@ -224,7 +232,7 @@ export class AIService {
               .slice(0, topN);
             chartSpecificData = `最重要的${topN}个指标权重：${sortedWeights.map((w: any) => w.weight.toFixed(4)).join(', ')}`;
           }
-          analysisPrompt = `基于指标权重雷达图，分析各维度的相对重要性。${chartSpecificData}。只分析权重分布，不要提及其他图表。要求：专注于权重大小、指标重要性排序、维度平衡性。字数控制在300-500字。`;
+          analysisPrompt = `请为学术论文章节"${sectionTitle}"撰写分析内容。基于指标权重雷达图，分析各维度的相对重要性。${chartSpecificData}。只分析权重分布，不要提及其他图表。要求：专注于权重大小、指标重要性排序、维度平衡性。字数控制在300-500字。`;
           break;
           
         case 'neural':
@@ -234,7 +242,7 @@ export class AIService {
             const finalLoss = losses[losses.length - 1];
             chartSpecificData = `训练轮次：${losses.length}，初始损失：${initialLoss.toFixed(4)}，最终损失：${finalLoss.toFixed(4)}`;
           }
-          analysisPrompt = `基于神经网络训练损失曲线，分析模型的训练过程。${chartSpecificData}。只分析损失变化，不要提及其他分析。要求：专注于损失下降趋势、收敛情况、训练效果评估。字数控制在300-500字。`;
+          analysisPrompt = `请为学术论文章节"${sectionTitle}"撰写分析内容。基于神经网络训练损失曲线，分析模型的训练过程。${chartSpecificData}。只分析损失变化，不要提及其他分析。要求：专注于损失下降趋势、收敛情况、训练效果评估。字数控制在300-500字。`;
           break;
           
         case 'importance':
@@ -243,7 +251,7 @@ export class AIService {
             const maxImportance = Math.max(...importance);
             chartSpecificData = `特征数量：${importance.length}，最高重要性：${maxImportance.toFixed(4)}`;
           }
-          analysisPrompt = `基于特征重要性柱状图，分析各特征对模型的贡献。${chartSpecificData}。只分析特征重要性，不要提及其他内容。要求：专注于重要特征识别、特征贡献度差异、关键因素分析。字数控制在300-500字。`;
+          analysisPrompt = `请为学术论文章节"${sectionTitle}"撰写分析内容。基于特征重要性柱状图，分析各特征对模型的贡献。${chartSpecificData}。只分析特征重要性，不要提及其他内容。要求：专注于重要特征识别、特征贡献度差异、关键因素分析。字数控制在300-500字。`;
           break;
           
         case 'shap':
@@ -251,7 +259,7 @@ export class AIService {
             const ipCount = shapResult.ip_explanations.length;
             chartSpecificData = `分析样本数：${ipCount}个IP`;
           }
-          analysisPrompt = `基于SHAP蜂群图，分析模型的可解释性。${chartSpecificData}。只分析SHAP值分布，不要提及其他方法。要求：专注于特征贡献度、正负影响、个体差异性。字数控制在300-500字。`;
+          analysisPrompt = `请为学术论文章节"${sectionTitle}"撰写分析内容。基于SHAP蜂群图，分析模型的可解释性。${chartSpecificData}。只分析SHAP值分布，不要提及其他方法。要求：专注于特征贡献度、正负影响、个体差异性。字数控制在300-500字。`;
           break;
           
         case 'pca':
@@ -260,7 +268,7 @@ export class AIService {
             const var2 = (pcaResult.explained_variance_ratio[1] * 100).toFixed(1);
             chartSpecificData = `PC1方差贡献：${var1}%，PC2方差贡献：${var2}%`;
           }
-          analysisPrompt = `基于PCA降维散点图，分析数据的主成分结构。${chartSpecificData}。只分析降维结果，不要提及其他分析。要求：专注于主成分解释、数据分布模式、样本聚集特征。字数控制在300-500字。`;
+          analysisPrompt = `请为学术论文章节"${sectionTitle}"撰写分析内容。基于PCA降维散点图，分析数据的主成分结构。${chartSpecificData}。只分析降维结果，不要提及其他分析。要求：专注于主成分解释、数据分布模式、样本聚集特征。字数控制在300-500字。`;
           break;
           
         case 'cluster':
@@ -268,7 +276,7 @@ export class AIService {
             const clusterCount = new Set(advancedClusterResult.clustering_results.map((r: any) => r.cluster)).size;
             chartSpecificData = `聚类数量：${clusterCount}个`;
           }
-          analysisPrompt = `基于聚类分析图（含凸包），分析样本的分组特征。${chartSpecificData}。只分析聚类结果，不要提及其他内容。要求：专注于聚类质量、分组特征、类间差异。字数控制在300-500字。`;
+          analysisPrompt = `请为学术论文章节"${sectionTitle}"撰写分析内容。基于聚类分析图（含凸包），分析样本的分组特征。${chartSpecificData}。只分析聚类结果，不要提及其他内容。要求：专注于聚类质量、分组特征、类间差异。字数控制在300-500字。`;
           break;
           
         default:
@@ -322,7 +330,15 @@ export class AIService {
   }
 
   // 获取学术化章节标题
-  static getAcademicSectionTitle(chartId: string): string {
+  static getAcademicSectionTitle(
+    chartId: string, 
+    selectedChartIds?: string[]
+  ): string {
+    if (selectedChartIds) {
+      return this.getDynamicSectionTitle(chartId, selectedChartIds);
+    }
+    
+    // 保留原有的固定序号作为后备
     const sectionTitles: Record<string, string> = {
       'fitness': '4.1 权重优化算法收敛性分析',
       'scores': '4.2 综合评价结果分布特征',
@@ -354,28 +370,134 @@ export class AIService {
     try {
       let prompt = '';
       
+      // 获取选中图表的类型列表，用于在提示词中明确说明
+      const selectedChartTypes = chartTabs
+        .filter(tab => !tab.disabled)
+        .map(tab => this.getChineseChartTitle(tab.id))
+        .join('、');
+      
+      const selectedChartCount = chartTabs.filter(tab => !tab.disabled).length;
+      
       switch (contentType) {
         case 'abstract':
-          prompt = `请为《基于多维评价体系的少数民族体育IP品牌塑造路径研究》撰写学术论文摘要。研究样本${ipCount}个IP项目，使用${indicatorCount}项指标。要求包含：研究背景、方法、主要发现、创新点、实践意义。字数400-500字，体现学术严谨性，包含关键词。`;
+          prompt = `请为《基于多维评价体系的少数民族体育IP品牌塑造路径研究》撰写学术论文摘要。
+
+研究基本信息：
+- 研究样本：${ipCount}个IP项目
+- 使用指标：${indicatorCount}项指标
+- 分析图表：${selectedChartCount}个图表类型（${selectedChartTypes}）
+
+要求：
+1. 只基于选中的${selectedChartCount}个图表类型进行分析说明
+2. 包含：研究背景、方法、主要发现、创新点、实践意义
+3. 字数400-500字，体现学术严谨性
+4. 不要提及未选中的其他分析方法`;
           break;
+          
         case 'background':
-          prompt = `请撰写少数民族体育IP品牌塑造研究的背景与意义章节。包含：1.1研究背景(当前发展现状、存在问题)，1.2研究意义(理论价值、实践意义)，1.3研究目标(3个具体目标)。要求学术化表达，逻辑清晰，字数800-1000字。`;
+          prompt = `请撰写少数民族体育IP品牌塑造研究的背景与意义章节。
+
+研究设置：
+- 基于${selectedChartCount}个图表类型的分析方法：${selectedChartTypes}
+- 样本规模：${ipCount}个IP项目，${indicatorCount}项指标
+
+章节要求：
+1.1 研究背景（当前发展现状、存在问题）
+1.2 研究意义（理论价值、实践意义）
+1.3 研究目标（3个具体目标）
+
+注意：
+- 只提及和介绍选中的分析方法（${selectedChartTypes}）
+- 不要提及其他未选中的分析技术
+- 学术化表达，逻辑清晰，字数800-1000字`;
           break;
+          
         case 'method':
-          prompt = `请撰写研究方法与数据来源章节。包含：2.1研究方法(遗传算法、神经网络、SHAP分析等)，2.2数据来源与样本(${ipCount}个IP项目，${indicatorCount}项指标)，2.3技术路线。要求专业术语准确，方法论述清晰，字数700-900字。`;
+          prompt = `请撰写研究方法与数据来源章节。
+
+本研究采用的分析方法：
+- 选中的图表类型：${selectedChartTypes}（共${selectedChartCount}种方法）
+- 数据来源：${ipCount}个IP项目，${indicatorCount}项指标
+
+章节结构：
+2.1 研究方法（详细介绍选中的${selectedChartCount}种分析方法）
+2.2 数据来源与样本说明
+2.3 技术路线（基于选中的分析方法）
+
+要求：
+- 只详细阐述选中的分析方法，不提及其他方法
+- 专业术语准确，方法论述清晰
+- 字数700-900字`;
           break;
+          
         case 'analysis_intro':
-          prompt = `请撰写"3.评价体系构建与算法优化"和"4.实证分析结果"两个章节的引言部分。说明评价体系的构建逻辑、算法选择依据，以及实证分析的整体思路。要求学术严谨，逻辑清晰，字数500-600字。`;
+          prompt = `请撰写"3.评价体系构建与算法优化"和"4.实证分析结果"两个章节的引言部分。
+
+本研究的分析框架：
+- 采用的图表分析类型：${selectedChartTypes}（${selectedChartCount}种方法）
+- 分析对象：${ipCount}个IP项目，${indicatorCount}项指标
+
+内容要求：
+1. 说明评价体系的构建逻辑
+2. 解释为什么选择这${selectedChartCount}种分析方法
+3. 阐述实证分析的整体思路和逻辑链条
+
+注意：
+- 只围绕选中的分析方法展开论述
+- 不提及或暗示其他分析技术
+- 学术严谨，逻辑清晰，字数500-600字`;
           break;
+          
         case 'branding_path':
-          prompt = `请撰写"品牌塑造路径设计"章节。基于前面的实证分析结果，提出少数民族体育IP的品牌塑造路径。包含：5.1三位一体塑造模式，5.2差异化发展策略，5.3协同发展机制。要求实用性强，可操作性强，字数1000-1200字。`;
+          prompt = `请撰写"品牌塑造路径设计"章节。
+
+基于前面的实证分析结果（采用${selectedChartTypes}等${selectedChartCount}种分析方法），提出少数民族体育IP的品牌塑造路径。
+
+章节结构：
+5.1 三位一体塑造模式
+5.2 差异化发展策略
+5.3 协同发展机制
+
+要求：
+- 基于选中的分析方法得出的结论提出建议
+- 实用性强，可操作性强
+- 字数1000-1200字
+- 不涉及未采用的分析方法的结论`;
           break;
+          
         case 'policy_suggestions':
-          prompt = `请撰写"政策建议与实践指导"章节。包含：6.1政策支持建议(具体政策措施)，6.2运营实践指导(操作性建议)，6.3发展路径优化(实施方案)。要求针对性强，可行性高，字数800-1000字。`;
+          prompt = `请撰写"政策建议与实践指导"章节。
+
+基于${selectedChartTypes}等${selectedChartCount}种分析方法的研究发现，提出政策建议。
+
+章节结构：
+6.1 政策支持建议（具体政策措施）
+6.2 运营实践指导（操作性建议）
+6.3 发展路径优化（实施方案）
+
+要求：
+- 针对性强，可行性高
+- 基于本研究采用的分析方法得出的结论
+- 字数800-1000字`;
           break;
+          
         case 'conclusion':
-          prompt = `请撰写"结论与展望"章节。包含：7.1主要结论(研究发现总结)，7.2研究贡献(理论贡献、实践贡献、方法贡献)，7.3研究展望(未来研究方向)。要求高度概括，前瞻性强，字数600-800字。`;
+          prompt = `请撰写"结论与展望"章节。
+
+本研究采用了${selectedChartTypes}等${selectedChartCount}种分析方法，对${ipCount}个IP项目进行分析。
+
+章节结构：
+7.1 主要结论（基于选中分析方法的研究发现总结）
+7.2 研究贡献（理论贡献、实践贡献、方法贡献）
+7.3 研究展望（未来研究方向）
+
+要求：
+- 只总结基于选中分析方法的发现
+- 高度概括，前瞻性强
+- 字数600-800字
+- 不提及未采用的其他分析技术`;
           break;
+          
         default:
           return '<p>内容生成中...</p>';
       }
@@ -443,5 +565,63 @@ export class AIService {
     };
     
     return titleMap[chartId] || '未知图表';
+  }
+
+  // 新增：动态生成论文目录
+  static generateDynamicTableOfContents(
+    selectedChartIds: string[], 
+    chartTabs: any[]
+  ): string {
+    // 过滤出选中的图表
+    const selectedCharts = chartTabs.filter(tab => selectedChartIds.includes(tab.id));
+    
+    let tocContent = '';
+    let currentPage = 3; // 从第3页开始
+    
+    // 固定的前几个章节
+    tocContent += `<p>1. 研究背景与意义 ......................................................... ${currentPage}</p>\n`;
+    currentPage++;
+    
+    tocContent += `<p>2. 研究方法与数据来源 .................................................... ${currentPage}</p>\n`;
+    currentPage++;
+    
+    tocContent += `<p>3. 评价体系构建与算法优化 ............................................... ${currentPage}</p>\n`;
+    currentPage++;
+    
+    tocContent += `<p>4. 实证分析结果 ......................................................... ${currentPage}</p>\n`;
+    currentPage++;
+    
+    // 动态生成图表分析章节
+    selectedCharts.forEach((chart, index) => {
+      const chineseTitle = this.getChineseChartTitle(chart.id);
+      const sectionNumber = `4.${index + 1}`;
+      tocContent += `<p style="margin-left: 20px;">${sectionNumber} ${chineseTitle}分析 ................................... ${currentPage}</p>\n`;
+      currentPage++;
+    });
+    
+    // 固定的后几个章节
+    tocContent += `<p>5. 品牌塑造路径设计 ..................................................... ${currentPage}</p>\n`;
+    currentPage++;
+    
+    tocContent += `<p>6. 政策建议与实践指导 ................................................... ${currentPage}</p>\n`;
+    currentPage++;
+    
+    tocContent += `<p>7. 结论与展望 .......................................................... ${currentPage}</p>\n`;
+    
+    return tocContent;
+  }
+
+  // 新增：获取动态章节标题（带序号）
+  static getDynamicSectionTitle(
+    chartId: string, 
+    selectedChartIds: string[]
+  ): string {
+    const index = selectedChartIds.indexOf(chartId);
+    if (index === -1) return '4.X 相关分析结果';
+    
+    const sectionNumber = `4.${index + 1}`;
+    const chineseTitle = this.getChineseChartTitle(chartId);
+    
+    return `${sectionNumber} ${chineseTitle}分析`;
   }
 } 
