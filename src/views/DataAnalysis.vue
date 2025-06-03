@@ -1795,4 +1795,4 @@ const updateFilteredIndicators = async () => {
   margin-bottom: 20px;
   align-items: start;
 }
-</style>
+</style> 

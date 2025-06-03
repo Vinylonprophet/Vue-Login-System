@@ -378,14 +378,14 @@ export class ExportService {
     
     // 增加等待时间 - 确保图表完全渲染
     const waitTimeMap: Record<string, number> = {
-      'shap': 15000,       // SHAP图表最复杂，需要更多时间
-      'importance': 15000, // 特征重要性图表，柱状图+标签，增加到12秒
-      'radar': 15000,      // 雷达图有线条和多个点，需要更多时间
-      'neural': 15000,      // 神经网络图表
-      'pca': 15000,         // PCA图表
-      'cluster': 15000,     // 聚类图表
-      'fitness': 15000,     // 适应度曲线
-      'scores': 15000,      // 评分分布
+      'shap': 18000,       // SHAP图表最复杂，散点图+多数据集，需要最多时间
+      'importance': 12000, // 特征重要性图表，柱状图+标签
+      'radar': 12000,      // 雷达图有线条和多个点，需要更多时间
+      'neural': 10000,     // 神经网络图表，线图比较简单
+      'pca': 8000,         // PCA图表，散点图
+      'cluster': 8000,     // 聚类图表，图片形式
+      'fitness': 6000,     // 适应度曲线，简单线图
+      'scores': 6000,      // 评分分布，简单柱状图
     };
     
     const waitTime = waitTimeMap[chart.id] || 5000;
@@ -398,8 +398,8 @@ export class ExportService {
     const canvasId = ChartService.getCanvasId(chart.id);
     let imageDataUrl: string | null = null;
     
-    // 增加重试次数到3次
-    const maxRetries = 3;
+    // 增加重试次数 - SHAP图表需要更多重试机会
+    const maxRetries = chart.id === 'shap' ? 5 : 3;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       addLog(`🎯 第${attempt}次尝试获取图表: ${chineseTitle}`);
@@ -508,7 +508,7 @@ export class ExportService {
   // 新增：动态等待图表渲染完成
   private static async waitForChartToRender(chartId: string, addLog: (message: string) => void): Promise<void> {
     const canvasId = ChartService.getCanvasId(chartId);
-    const maxWaitTime = 15000; // 最大等待15秒，给复杂图表更多时间
+    const maxWaitTime = 20000; // 最大等待20秒，给最复杂的图表充足时间
     const checkInterval = 500;  // 每500ms检查一次
     let waitedTime = 0;
     
@@ -548,6 +548,29 @@ export class ExportService {
                 // 像素检查失败，继续等待
               }
             } 
+            // 对SHAP图表进行额外检查：确保散点图和多数据集都已渲染
+            else if (chartId === 'shap') {
+              try {
+                const context = canvas.getContext('2d');
+                if (context) {
+                  // 检查Canvas中是否有散点图内容
+                  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                  const coloredPixels = imageData.data.filter((pixel, index) => 
+                    index % 4 !== 3 && pixel < 230 // 非透明度通道且有颜色
+                  ).length;
+                  
+                  // SHAP图应该有大量彩色散点像素
+                  if (coloredPixels > 2000) {
+                    addLog(`✅ SHAP图渲染检查通过: ${chartId} (耗时${waitedTime}ms, 散点像素数${coloredPixels})`);
+                    return;
+                  } else {
+                    addLog(`⏳ SHAP图仍在渲染中: ${chartId} (散点像素数${coloredPixels})`);
+                  }
+                }
+              } catch (error) {
+                // 像素检查失败，继续等待
+              }
+            }
             // 对特征重要性图表进行额外检查
             else if (chartId === 'importance') {
               try {
@@ -565,6 +588,75 @@ export class ExportService {
                     return;
                   } else {
                     addLog(`⏳ 特征重要性图仍在渲染中: ${chartId} (彩色像素数${coloredPixels})`);
+                  }
+                }
+              } catch (error) {
+                // 像素检查失败，继续等待
+              }
+            }
+            // 对PCA图表进行额外检查：确保散点图已渲染
+            else if (chartId === 'pca') {
+              try {
+                const context = canvas.getContext('2d');
+                if (context) {
+                  // 检查Canvas中是否有散点内容
+                  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                  const coloredPixels = imageData.data.filter((pixel, index) => 
+                    index % 4 !== 3 && pixel < 240 // 非透明度通道且有颜色
+                  ).length;
+                  
+                  // PCA散点图应该有散点像素
+                  if (coloredPixels > 300) {
+                    addLog(`✅ PCA图渲染检查通过: ${chartId} (耗时${waitedTime}ms, 散点像素数${coloredPixels})`);
+                    return;
+                  } else {
+                    addLog(`⏳ PCA图仍在渲染中: ${chartId} (散点像素数${coloredPixels})`);
+                  }
+                }
+              } catch (error) {
+                // 像素检查失败，继续等待
+              }
+            }
+            // 对线图类型图表进行检查（neural, fitness)
+            else if (chartId === 'neural' || chartId === 'fitness') {
+              try {
+                const context = canvas.getContext('2d');
+                if (context) {
+                  // 检查Canvas中是否有线条内容
+                  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                  const coloredPixels = imageData.data.filter((pixel, index) => 
+                    index % 4 !== 3 && pixel < 240 // 非透明度通道且有颜色
+                  ).length;
+                  
+                  // 线图应该有线条像素
+                  if (coloredPixels > 400) {
+                    addLog(`✅ ${chartId}图渲染检查通过: ${chartId} (耗时${waitedTime}ms, 线条像素数${coloredPixels})`);
+                    return;
+                  } else {
+                    addLog(`⏳ ${chartId}图仍在渲染中: ${chartId} (线条像素数${coloredPixels})`);
+                  }
+                }
+              } catch (error) {
+                // 像素检查失败，继续等待
+              }
+            }
+            // 对柱状图类型图表进行检查（scores)
+            else if (chartId === 'scores') {
+              try {
+                const context = canvas.getContext('2d');
+                if (context) {
+                  // 检查Canvas中是否有柱状图内容
+                  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                  const coloredPixels = imageData.data.filter((pixel, index) => 
+                    index % 4 !== 3 && pixel < 240 // 非透明度通道且有颜色
+                  ).length;
+                  
+                  // 柱状图应该有柱子像素
+                  if (coloredPixels > 600) {
+                    addLog(`✅ 评分分布图渲染检查通过: ${chartId} (耗时${waitedTime}ms, 柱状像素数${coloredPixels})`);
+                    return;
+                  } else {
+                    addLog(`⏳ 评分分布图仍在渲染中: ${chartId} (柱状像素数${coloredPixels})`);
                   }
                 }
               } catch (error) {
