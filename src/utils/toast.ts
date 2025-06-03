@@ -117,8 +117,8 @@ export class ToastManager {
     const {
       successMessage,
       errorMessage,
-      minDelay = 10000, // 默认最小10秒
-      maxDelay = 20000   // 默认最大20秒
+      minDelay = 100, // 默认最小10秒
+      maxDelay = 200   // 默认最大20秒
     } = options
 
     try {
@@ -137,7 +137,6 @@ export class ToastManager {
       // 如果执行时间少于随机延迟时间，则等待剩余时间
       if (elapsedTime < randomDelay) {
         const remainingTime = randomDelay - elapsedTime
-        console.log(`分析完成，继续等待 ${remainingTime}ms 以达到预期的加载时间 ${randomDelay}ms`)
         await new Promise(resolve => setTimeout(resolve, remainingTime))
       }
 

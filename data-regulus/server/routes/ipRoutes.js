@@ -1449,7 +1449,8 @@ router.post('/ai-analysis', async (req, res) => {
 
         // 调用DeepSeek API - 尝试多个可能的模型名称
         const modelOptions = [
-            'o3',
+            'gpt-4o',
+            // 'o3'
         ];
         
         let deepSeekResponse = null;
@@ -1464,7 +1465,7 @@ router.post('/ai-analysis', async (req, res) => {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': 'Bearer sk-ETN8d74TXXyvflkTvlNmceQCD6eYP4T5ooPBWzGWslWsV9X0'
+                        'Authorization': 'Bearer sk-BJE6DD2a8CFPAdbSOCdaOkCsUUlAtjilrWXxGkAzbe2dBdUL'
                     },
                     body: JSON.stringify({
                         model: modelName,

@@ -1,67 +1,19 @@
 <template>
   <div class="dashboard-container">
-    <!-- 页面标题 -->
-    <div class="header">
-      <div class="header-top">
-        <h1>少数民族民俗体育IP数据分析平台</h1>
-        <div class="header-actions">
-          <button @click="performComprehensiveAnalysis" class="header-btn analysis-btn" :disabled="selectedIPs.length < 2">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-            </svg>
-            <span>全面分析</span>
-          </button>
-          <button @click="exportToPDF" class="header-btn export-btn" :disabled="!hasAnalysisResults">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <path d="M14 2v6h6"/>
-              <path d="M16 13H8"/>
-              <path d="M16 17H8"/>
-              <path d="M10 9H8"/>
-            </svg>
-            <span>导出PDF</span>
-          </button>
-          <button @click="exportToExcel" class="header-btn excel-btn" :disabled="!hasAnalysisResults">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <path d="M14 2v6h6"/>
-              <path d="M9 15h6"/>
-              <path d="M12 9v6"/>
-            </svg>
-            <span>导出Excel</span>
-          </button>
-          </div>
-          </div>
-      
-      <!-- 统计信息栏 -->
-      <div class="stats-bar">
-        <div class="stats-container">
-          <div class="stat-item">
-            <div class="stat-icon">📊</div>
-            <div class="stat-content">
-              <span class="stat-label">总IP数量</span>
-              <span class="stat-value">{{ statistics.totalIPs }}</span>
-        </div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-icon">🏷️</div>
-            <div class="stat-content">
-              <span class="stat-label">组别数量</span>
-              <span class="stat-value">{{ statistics.totalGroups }}</span>
-            </div>
-          </div>
-        </div>
-        <div class="stats-actions">
-          <button @click="toggleFilterPanel" class="header-btn filter-btn">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M3 12l2-2v-2a7 7 0 1 1 14 0v2l2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6z"/>
-              <path d="M9 21v-6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6"/>
-            </svg>
-            <span>指标筛选</span>
-        </button>
-      </div>
-      </div>
-    </div>
+    <!-- 使用HeaderSection组件 -->
+    <HeaderSection 
+      :selectedIPsCount="selectedIPs.length"
+      :hasAnalysisResults="hasAnalysisResults"
+      @performAnalysis="performComprehensiveAnalysis"
+      @exportPDF="exportToPDF"
+      @exportExcel="exportToExcel"
+    />
+    
+    <!-- 使用StatsBar组件 -->
+    <StatsBar 
+      :statistics="statistics"
+      @toggleFilterPanel="toggleFilterPanel"
+    />
 
     <!-- 筛选面板 -->
     <div class="filter-section" v-show="showFilterPanel">
@@ -296,20 +248,72 @@
       </div>
     </div>
 
-    <!-- 计算日志 -->
-    <div class="log-panel">
-      <h3>分析过程日志</h3>
-      <div class="log-content" ref="logContent">
-        <div v-for="(log, index) in logs" :key="index" class="log-entry">
-          {{ log }}
-        </div>
-      </div>
-    </div>
+    <!-- 使用LogPanel组件 -->
+    <LogPanel :logs="logs" />
 
     <!-- 加载遮罩 -->
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
       <div class="loading-text">{{ loadingText }}</div>
+    </div>
+
+    <!-- 图表选择弹窗 -->
+    <div v-if="showChartSelectionDialog" class="chart-selection-overlay">
+      <div class="chart-selection-dialog">
+        <div class="dialog-header">
+          <h3>选择要导出的图表</h3>
+          <button @click="closeChartSelectionDialog" class="close-btn">×</button>
+        </div>
+        
+        <div class="dialog-content">
+          <p class="dialog-description">请选择您想要在PDF中包含的图表：</p>
+          
+          <div class="chart-selection-list">
+            <div 
+              v-for="chart in availableCharts" 
+              :key="chart.id"
+              class="chart-selection-item"
+              :class="{ disabled: chart.disabled }"
+            >
+              <label class="chart-checkbox-label">
+                <input 
+                  type="checkbox" 
+                  v-model="selectedChartsForExport"
+                  :value="chart.id"
+                  :disabled="chart.disabled"
+                  class="chart-checkbox"
+                />
+                <div class="chart-info">
+                  <div class="chart-title">
+                    <span class="chart-icon">{{ chart.icon }}</span>
+                    <span class="chart-name">{{ chart.title }}</span>
+                    <span v-if="chart.disabled" class="disabled-reason">(无数据)</span>
+                  </div>
+                  <div class="chart-description">{{ chart.description }}</div>
+                </div>
+              </label>
+            </div>
+          </div>
+          
+          <div class="selection-summary">
+            <p>已选择 <strong>{{ selectedChartsForExport.length }}</strong> 个图表</p>
+          </div>
+        </div>
+        
+        <div class="dialog-actions">
+          <button @click="selectAllCharts" class="btn btn-secondary">
+            {{ selectedChartsForExport.length === availableEnabledCharts.length ? '取消全选' : '全选' }}
+          </button>
+          <button @click="closeChartSelectionDialog" class="btn btn-secondary">取消</button>
+          <button 
+            @click="confirmExportPDF" 
+            class="btn btn-primary"
+            :disabled="selectedChartsForExport.length === 0"
+          >
+            导出PDF ({{ selectedChartsForExport.length }}个图表)
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- AI分析聊天窗口 -->
@@ -463,6 +467,18 @@ import { toast } from '../utils/toast';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
+
+// 导入Services
+import { ChartService } from '../services/DataAnalysis/chartService';
+import { AIService } from '../services/DataAnalysis/aiService';
+import { ExportService } from '../services/DataAnalysis/exportService';
+import { DataService } from '../services/DataAnalysis/dataService';
+
+// 导入Components
+import HeaderSection from '../components/DataAnalysis/HeaderSection.vue';
+import StatsBar from '../components/DataAnalysis/StatsBar.vue';
+import LogPanel from '../components/DataAnalysis/LogPanel.vue';
+
 import {
   Chart,
   CategoryScale,
@@ -640,12 +656,13 @@ onMounted(async () => {
 const loadInitialData = async () => {
   loading.value = true;
   try {
-    await Promise.all([
-      loadIndicatorStructure(),
-      loadGroups(),
-      loadIPs(),
-      loadStatistics()
-    ]);
+    const result = await DataService.loadInitialData();
+    indicatorStructure.value = result.indicatorStructure;
+    ips.value = result.ips;
+    Object.assign(statistics, result.statistics);
+    availableGroups.value = result.availableGroups;
+    filteredIPs.value = result.filteredIPs;
+    filteredThirdIndicators.value = result.indicatorStructure.allThird;
   } catch (error) {
     console.error('加载初始数据失败:', error);
     addLog(`加载初始数据失败: ${error}`);
@@ -703,296 +720,41 @@ const loadStatistics = async () => {
 };
 
 const performComprehensiveAnalysis = async () => {
-  if (selectedIPs.value.length < 2) {
-    toast.warning('请至少选择2个IP进行全面分析');
-    return;
-  }
-  
-  // 获取选中的IP数据，并计算多专家平均值
-  const selectedIPData: IP[] = [];
-  for (const ipId of selectedIPs.value) {
-    const ip = ips.value.find(item => item.id === ipId);
-    if (!ip) continue;
-    
-    if (ip._isGroup) {
-      // 这是多专家聚合记录，需要获取所有专家数据并计算平均值
-      try {
-        const expertsResponse = await ipApi.getExpertScoresByIP(ip.project_name, ip.group_name);
-        if (expertsResponse.data && expertsResponse.data.length > 0) {
-          const expertScores = expertsResponse.data;
-          
-          // 计算平均值
-          const averageIndicators: Record<string, number> = {};
-          const allProperties = indicatorStructure.value.allProperties || Object.keys(expertScores[0].indicators);
-          
-          allProperties.forEach(property => {
-            const sum = expertScores.reduce((acc, expert) => {
-              return acc + (expert.indicators[property] || 0);
-            }, 0);
-            averageIndicators[property] = sum / expertScores.length;
-          });
-          
-          // 创建平均值IP记录
-          selectedIPData.push({
-            ...ip,
-            expert: `${expertScores.length}位专家平均`,
-            indicators: averageIndicators
-          });
-        }
-      } catch (error) {
-        console.error(`获取IP ${ip.project_name} 的专家数据失败:`, error);
-        addLog(`⚠️ 获取IP "${ip.project_name}" 的专家数据失败，跳过该IP`);
-      }
-    } else {
-      // 单一专家记录，直接使用
-      selectedIPData.push(ip);
-    }
-  }
-  
-  if (selectedIPData.length < 2) {
-    toast.warning('有效IP数量不足2个，无法进行分析');
-    return;
-  }
-  
-  // 临时存储分析结果，不立即设置到响应式变量
-  let tempEvaluationResult: any = null;
-  let tempNeuralNetworkResult: any = null;
-  let tempShapResult: any = null;
-  let tempPcaResult: any = null;
-  let tempAdvancedClusterResult: any = null;
-  let tempAdvancedClusterImage: string = '';
-  
   try {
-    // 使用toast的withAnalysis方法，确保加载动画至少显示10-20秒
-    await toast.withAnalysis(
-      async () => {
-        loading.value = true;
-        loadingText.value = '全面分析中...';
-        
-        // 清空所有之前的ML分析结果
-        evaluationResult.value = null;
-        neuralNetworkResult.value = null;
-        shapResult.value = null;
-        pcaResult.value = null;
-        advancedClusterResult.value = null;
-        advancedClusterImage.value = '';
-        
-        addLog('=== 开始全面分析 ===');
-        addLog(`选中IP数量: ${selectedIPs.value.length}`);
-        addLog(`有效分析IP数量: ${selectedIPData.length}`);
-        addLog(`分析IP列表: ${selectedIPData.map(ip => `${ip.project_name}(${ip.expert})`).join(', ')}`);
-        
-        // 步骤1: 基础评估 - 使用计算好的平均值数据
-        const response = await ipApi.evaluateSelected(selectedIPData, filteredThirdIndicators.value);
-        if (response.data) {
-          tempEvaluationResult = response.data;
-          
-          // 注意：这里不调用renderCharts()，不设置evaluationResult.value
-        }
-
-        // 步骤2: 神经网络训练
-        if (selectedIPs.value.length >= 5) {
-          loadingText.value = '神经网络训练中...';
-          try {
-            const currentFeatureNames = filteredThirdIndicators.value.length > 0 
-              ? filteredThirdIndicators.value 
-              : indicatorStructure.value.allThird;
-            
-            // 转换IP数据格式：将对象格式的indicators转换为数组格式
-            const ipsWithArrayIndicators = selectedIPData.map(ip => {
-              // 如果indicators已经是数组格式，直接使用
-              if (Array.isArray(ip.indicators)) {
-                return { ...ip, indicators: ip.indicators };
-              }
-              
-              // 如果indicators是对象格式，需要转换为数组
-              const indicatorArray: number[] = [];
-              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
-                // 按照系统定义的属性顺序生成数组
-                indicatorStructure.value.allProperties.forEach(property => {
-                  indicatorArray.push(ip.indicators[property] || 0);
-                });
-              } else {
-                // 兜底方案：如果没有属性映射，直接使用对象值
-                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
-              }
-              
-              return { ...ip, indicators: indicatorArray };
-            });
-            
-            const nnResponse = await pythonMLApi.trainNeuralNetwork(ipsWithArrayIndicators, currentFeatureNames);
-            if (nnResponse.success && nnResponse.data) {
-              tempNeuralNetworkResult = nnResponse.data;
-            } else {
-              addLog(`⚠️ 神经网络训练失败: ${nnResponse.error || '未知错误'}`);
-            }
-          } catch (error) {
-            addLog(`⚠️ 神经网络训练失败: ${error}`);
-          }
-        } else {
-          addLog('⚠️ 选中IP数量不足5个，跳过神经网络训练');
-        }
-
-        // 步骤3: SHAP模型解释
-        if (selectedIPs.value.length >= 3) {
-          loadingText.value = 'SHAP分析中...';
-          try {
-            const currentFeatureNames = filteredThirdIndicators.value.length > 0 
-              ? filteredThirdIndicators.value 
-              : indicatorStructure.value.allThird;
-            
-            // 转换IP数据格式
-            const ipsWithArrayIndicators = selectedIPData.map(ip => {
-              if (Array.isArray(ip.indicators)) {
-                return { ...ip, indicators: ip.indicators };
-              }
-              
-              const indicatorArray: number[] = [];
-              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
-                indicatorStructure.value.allProperties.forEach(property => {
-                  indicatorArray.push(ip.indicators[property] || 0);
-                });
-              } else {
-                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
-              }
-              
-              return { ...ip, indicators: indicatorArray };
-            });
-            
-            const shapResponse = await pythonMLApi.shapExplain(ipsWithArrayIndicators, currentFeatureNames);
-            if (shapResponse.success && shapResponse.data) {
-              tempShapResult = shapResponse.data;
-            } else {
-              addLog(`⚠️ SHAP分析失败: ${shapResponse.error || '未知错误'}`);
-            }
-          } catch (error) {
-            addLog(`⚠️ SHAP分析失败: ${error}`);
-          }
-        } else {
-          addLog('⚠️ 选中IP数量不足3个，跳过SHAP分析');
-        }
-
-        // 步骤4: PCA降维分析
-        if (selectedIPs.value.length >= 2) {
-          loadingText.value = 'PCA分析中...';
-          try {
-            // 转换IP数据格式
-            const ipsWithArrayIndicators = selectedIPData.map(ip => {
-              if (Array.isArray(ip.indicators)) {
-                return { ...ip, indicators: ip.indicators };
-              }
-              
-              const indicatorArray: number[] = [];
-              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
-                indicatorStructure.value.allProperties.forEach(property => {
-                  indicatorArray.push(ip.indicators[property] || 0);
-                });
-              } else {
-                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
-              }
-              
-              return { ...ip, indicators: indicatorArray };
-            });
-            
-            const pcaResponse = await pythonMLApi.pcaAnalysis(ipsWithArrayIndicators, 2);
-            if (pcaResponse.success) {
-              tempPcaResult = pcaResponse;
-            } else {
-              addLog(`⚠️ PCA分析失败: ${pcaResponse.error || '未知错误'}`);
-            }
-          } catch (error) {
-            addLog(`⚠️ PCA分析失败: ${error}`);
-          }
-        } else {
-          addLog('⚠️ 选中IP数量不足2个，跳过PCA分析');
-        }
-
-        // 步骤5: 高级聚类分析
-        if (selectedIPs.value.length >= 2) {
-          loadingText.value = '聚类分析中...';
-          try {
-            // 转换IP数据格式
-            const ipsWithArrayIndicators = selectedIPData.map(ip => {
-              if (Array.isArray(ip.indicators)) {
-                return { ...ip, indicators: ip.indicators };
-              }
-              
-              const indicatorArray: number[] = [];
-              if (indicatorStructure.value.allProperties && indicatorStructure.value.allProperties.length > 0) {
-                indicatorStructure.value.allProperties.forEach(property => {
-                  indicatorArray.push(ip.indicators[property] || 0);
-                });
-              } else {
-                indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
-              }
-              
-              return { ...ip, indicators: indicatorArray };
-            });
-            
-            const clusterResponse = await pythonMLApi.advancedClustering(ipsWithArrayIndicators, 2, true);
-            if (clusterResponse.success && clusterResponse.data) {
-              tempAdvancedClusterResult = clusterResponse.data;
-              // 生成聚类图像（但不立即显示）
-              const imageResponse = await generateAdvancedClusteringVisualizationFromData(clusterResponse.data);
-              if (imageResponse) {
-                tempAdvancedClusterImage = imageResponse;
-              }
-            } else {
-              addLog(`⚠️ 聚类分析失败: ${clusterResponse.error || '未知错误'}`);
-            }
-          } catch (error) {
-            addLog(`⚠️ 聚类分析失败: ${error}`);
-          }
-        } else {
-          addLog('⚠️ 选中IP数量不足2个，跳过高级聚类分析');
-        }
-        loadingText.value = '全面分析中...';
-        // 更新统计信息
-        await loadStatistics();
-
-      },
-      {
-        successMessage: `✅ 分析完成！已处理 ${selectedIPs.value.length} 个IP`,
-        errorMessage: '分析失败，请检查数据后重试'
-      }
+    const result = await DataService.performComprehensiveAnalysis(
+      selectedIPs.value,
+      ips.value,
+      indicatorStructure.value,
+      filteredThirdIndicators.value,
+      addLog,
+      (loadingValue: boolean) => { loading.value = loadingValue; },
+      (text: string) => { loadingText.value = text; }
     );
-    addLog('🎉 全面分析完成');
-    // 只有在withAnalysis完成后（即加载动画结束后），才设置结果数据并渲染图表
-    addLog('🎨 开始显示分析结果...');
     
-    // 设置分析结果到响应式变量
-    if (tempEvaluationResult) {
-      evaluationResult.value = tempEvaluationResult;
-    }
-    if (tempNeuralNetworkResult) {
-      neuralNetworkResult.value = tempNeuralNetworkResult;
-    }
-    if (tempShapResult) {
-      shapResult.value = tempShapResult;
-    }
-    if (tempPcaResult) {
-      pcaResult.value = tempPcaResult;
-    }
-    if (tempAdvancedClusterResult) {
-      advancedClusterResult.value = tempAdvancedClusterResult;
-    }
-    if (tempAdvancedClusterImage) {
-      advancedClusterImage.value = tempAdvancedClusterImage;
-    }
+    // 设置分析结果
+    evaluationResult.value = result.evaluationResult;
+    neuralNetworkResult.value = result.neuralNetworkResult;
+    shapResult.value = result.shapResult;
+    pcaResult.value = result.pcaResult;
+    advancedClusterResult.value = result.advancedClusterResult;
+    advancedClusterImage.value = result.advancedClusterImage;
     
-    // 等待DOM更新后渲染所有图表
+    // 渲染图表
     await nextTick();
-    renderCharts();
-    renderNeuralNetworkCharts();
-    renderSHAPChart();
-    renderPCAChart();
-    
-    addLog('✅ 所有结果已显示完成');
+    ChartService.renderCharts(evaluationResult.value, filteredThirdIndicators.value);
+    ChartService.renderNeuralNetworkCharts(
+      neuralNetworkResult.value, 
+      filteredThirdIndicators.value, 
+      indicatorStructure.value.allThird
+    );
+    ChartService.renderSHAPChart(shapResult.value);
+    ChartService.renderPCAChart(pcaResult.value);
     
   } catch (error) {
     console.error('全面分析失败:', error);
     addLog(`❌ 分析失败: ${error}`);
   } finally {
+    // 确保loading状态被重置
     loading.value = false;
     loadingText.value = '';
   }
@@ -1001,13 +763,6 @@ const performComprehensiveAnalysis = async () => {
 const addLog = (message: string) => {
   const timestamp = new Date().toLocaleTimeString();
   logs.value.push(`[${timestamp}] ${message}`);
-  
-  nextTick(() => {
-    const logContent = document.querySelector('.log-content');
-    if (logContent) {
-      logContent.scrollTop = logContent.scrollHeight;
-    }
-  });
 };
 
 // 图表渲染函数
@@ -1504,22 +1259,6 @@ const toggleFilterPanel = () => {
   addLog(`指标筛选面板已${showFilterPanel.value ? '显示' : '隐藏'}`);
 };
 
-const updateFilteredIndicators = async () => {
-  try {
-    const response = await ipApi.getFilteredIndicators(
-      selectedFirstLevel.value,
-      selectedSecondLevel.value
-    );
-    if (response.data) {
-      filteredThirdIndicators.value = response.data;
-      addLog(`已筛选出${filteredThirdIndicators.value.length}个三级指标`);
-    }
-  } catch (error) {
-    console.error('更新筛选指标失败:', error);
-    addLog(`筛选指标失败: ${error}`);
-  }
-};
-
 const clearFilters = () => {
   selectedFirstLevel.value = [];
   selectedSecondLevel.value = [];
@@ -1530,601 +1269,72 @@ const clearFilters = () => {
 const applyFilters = () => {
   addLog(`应用筛选条件: 一级指标${selectedFirstLevel.value.length}个, 二级指标${selectedSecondLevel.value.length}个`);
   addLog(`筛选后三级指标数量: ${filteredThirdIndicators.value.length}`);
-  // 应用筛选后自动隐藏筛选面板
   showFilterPanel.value = false;
   addLog('指标筛选面板已自动隐藏');
 };
 
 const toggleIPSelection = (ipId: string) => {
-  const index = selectedIPs.value.indexOf(ipId);
-  if (index > -1) {
-    selectedIPs.value.splice(index, 1);
-  } else {
-    selectedIPs.value.push(ipId);
-  }
+  selectedIPs.value = DataService.toggleIPSelection(ipId, selectedIPs.value);
   addLog(`IP选择已更新: 当前选中${selectedIPs.value.length}个IP`);
 };
 
 const selectAllFilteredIPs = () => {
-  selectedIPs.value = filteredIPs.value.map(ip => ip.id);
+  selectedIPs.value = DataService.selectAllFilteredIPs(filteredIPs.value);
   addLog(`已选择当前筛选的全部${selectedIPs.value.length}个IP`);
 };
 
 const isIPSelected = (ipId: string) => {
-  return selectedIPs.value.includes(ipId);
+  return DataService.isIPSelected(ipId, selectedIPs.value);
 };
 
 const clearSelection = () => {
-  selectedIPs.value = [];
+  selectedIPs.value = DataService.clearSelection();
   addLog('已清空IP选择');
 };
 
 const updateFilteredIPs = () => {
-  if (ipGroupFilter.value === '全部') {
-    filteredIPs.value = ips.value;
-  } else {
-    filteredIPs.value = ips.value.filter(ip => ip.group_name === ipGroupFilter.value);
-  }
+  filteredIPs.value = DataService.updateFilteredIPs(ips.value, ipGroupFilter.value);
   addLog(`筛选组别: ${ipGroupFilter.value}, 显示${filteredIPs.value.length}个IP`);
 };
 
-// PDF导出功能
+// PDF导出功能 - 显示图表选择弹窗
 const exportToPDF = async () => {
   if (!hasAnalysisResults.value) {
     toast.warning('请先进行全面分析后再导出PDF');
     return;
   }
   
+  // 默认选择所有可用的图表
+  selectedChartsForExport.value = availableEnabledCharts.value.map(chart => chart.id);
+  
+  // 显示图表选择弹窗
+  showChartSelectionDialog.value = true;
+};
+
+// 实际的PDF导出逻辑
+const performPDFExport = async (selectedChartIds: string[]) => {
   try {
-    loading.value = true;
-    loadingText.value = '准备导出PDF...';
-    
-    // 保存当前激活的图表
-    const originalActiveChart = activeChart.value;
-    
-    // 计算有多少个图表需要导出 - 使用与界面相同的条件
-    const charts = chartTabs.value.map(tab => ({
-      id: tab.id,
-      title: getChineseChartTitle(tab.id),
-      condition: !tab.disabled // 使用与界面相同的disabled逻辑
-    }));
-    
-    const validCharts = charts.filter(c => c.condition);
-    
-    addLog(`🚀 开始PDF导出流程`);
-    addLog(`📊 界面显示图表: ${chartTabs.value.length} 个`);
-    addLog(`✅ 可导出图表: ${validCharts.length} 个`);
-    addLog(`📋 图表列表: ${validCharts.map(c => c.title).join(', ')}`);
-    addLog(`⏰ 预计需要 ${Math.ceil(validCharts.length * 6)} 秒完成（包含AI分析）`);
-    addLog(`💡 使用HTML转PDF方式，完美支持中文显示`);
-    addLog(`🤖 每个图表都将生成专业AI分析`);
-    addLog(`⚡ 正在处理复杂图表，请耐心等待...`);
-    
-    // 确保所有图表都已正确渲染后再开始导出
-    addLog(`🔍 开始图表状态检查...`);
-    loadingText.value = '检查图表状态...';
-    
-    for (const chart of validCharts) {
-      if (!chart.condition) continue;
-      
-      // 切换到对应图表
-      activeChart.value = chart.id;
-      await nextTick();
-      await new Promise(resolve => setTimeout(resolve, 3000)); // 增加到3秒等待切换
-      
-      // 检查图表是否可见和有内容
-      const canvasId = getCanvasId(chart.id);
-      const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
-      
-      if (canvas) {
-        const chartInstance = Chart.getChart(canvas);
-        if (chartInstance && chartInstance.data && chartInstance.data.datasets && chartInstance.data.datasets.length > 0) {
-          addLog(`✅ 图表状态正常: ${getChineseChartTitle(chart.id)}`);
-        } else {
-          addLog(`⚠️ 图表可能需要重新渲染: ${getChineseChartTitle(chart.id)}`);
-          // 强制重新渲染
-          renderSpecificChart(chart.id);
-          await new Promise(resolve => setTimeout(resolve, 5000)); // 重新渲染后等待5秒
-        }
-      } else {
-        addLog(`⚠️ 图表Canvas未找到: ${getChineseChartTitle(chart.id)}`);
-      }
-    }
-    
-    addLog(`✅ 图表状态检查完成，开始导出...`);
-    
-    // 创建临时容器来放置PDF内容
-    const tempContainer = document.createElement('div');
-    tempContainer.style.position = 'absolute';
-    tempContainer.style.top = '-9999px';
-    tempContainer.style.left = '-9999px';
-    tempContainer.style.width = '210mm'; // A4宽度
-    tempContainer.style.padding = '20px';
-    tempContainer.style.fontFamily = 'Arial, "Microsoft YaHei", "SimSun", sans-serif';
-    tempContainer.style.fontSize = '14px';
-    tempContainer.style.lineHeight = '1.6';
-    tempContainer.style.color = '#333';
-    tempContainer.style.backgroundColor = 'white';
-    document.body.appendChild(tempContainer);
-    
-    // 获取AI生成的研究背景内容
-    addLog(`🤖 正在生成研究背景与意义...`);
-    loadingText.value = '正在生成研究背景与意义...';
-    const backgroundContent = await getAIGeneratedContent('background', selectedIPs.value.length, filteredThirdIndicators.value.length);
-    
-    // 获取AI生成的研究方法内容
-    addLog(`🤖 正在生成研究方法...`);
-    loadingText.value = '正在生成研究方法...';
-    const methodContent = await getAIGeneratedContent('method', selectedIPs.value.length, filteredThirdIndicators.value.length);
-    
-    // 获取AI生成的摘要内容
-    addLog(`🤖 正在生成摘要...`);
-    loadingText.value = '正在生成摘要...';
-    const abstractContent = await getAIGeneratedContent('abstract', selectedIPs.value.length, filteredThirdIndicators.value.length);
-    
-    // 创建PDF标题页
-    const titleSection = document.createElement('div');
-    titleSection.innerHTML = `
-      <div style="text-align: center; margin-bottom: 60px; padding: 40px 0;">
-        <h1 style="font-size: 28px; color: #2c3e50; margin-bottom: 30px; font-weight: bold; line-height: 1.4;">
-          基于多维评价体系的少数民族体育IP<br>品牌塑造路径研究
-        </h1>
-        <div style="margin: 30px 0; font-size: 16px; color: #666; line-height: 1.8;">
-          <p><strong>研究时间：</strong>${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-          <p><strong>样本规模：</strong>${selectedIPs.value.length}个体育IP项目</p>
-          <p><strong>评价指标：</strong>${filteredThirdIndicators.value.length}项核心指标</p>
-          <p><strong>分析方法：</strong>遗传算法优化、神经网络建模、SHAP解释性分析</p>
-        </div>
-      </div>
-      
-      <div style="margin-bottom: 40px; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
-        <h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">摘要</h2>
-        <div style="text-align: justify; line-height: 1.8;">
-          ${abstractContent}
-        </div>
-      </div>
-    `;
-    tempContainer.appendChild(titleSection);
-    
-    // 添加目录
-    const tocSection = document.createElement('div');
-    tocSection.style.pageBreakBefore = 'always';
-    tocSection.innerHTML = `
-      <div style="margin-bottom: 40px;">
-        <h2 style="font-size: 22px; color: #2c3e50; margin-bottom: 30px; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px;">目录</h2>
-        <div style="line-height: 2.0; font-size: 14px;">
-          <p>1. 研究背景与意义 ......................................................... 3</p>
-          <p>2. 研究方法与数据来源 .................................................... 4</p>
-          <p>3. 评价体系构建与算法优化 ............................................... 5</p>
-          <p>4. 实证分析结果 ......................................................... 6</p>
-          <p>5. 品牌塑造路径设计 ..................................................... ${6 + validCharts.length}</p>
-          <p>6. 政策建议与实践指导 ................................................... ${7 + validCharts.length}</p>
-          <p>7. 结论与展望 .......................................................... ${8 + validCharts.length}</p>
-        </div>
-      </div>
-    `;
-    tempContainer.appendChild(tocSection);
-    
-    // 添加研究背景（AI生成内容）
-    const backgroundSection = document.createElement('div');
-    backgroundSection.style.pageBreakBefore = 'always';
-    backgroundSection.innerHTML = `
-      <div style="margin-bottom: 40px;">
-        ${backgroundContent}
-      </div>
-    `;
-    tempContainer.appendChild(backgroundSection);
-    
-    // 添加研究方法（AI生成内容）
-    const methodSection = document.createElement('div');
-    methodSection.style.pageBreakBefore = 'always';
-    methodSection.innerHTML = `
-      <div style="margin-bottom: 40px;">
-        ${methodContent}
-      </div>
-    `;
-    tempContainer.appendChild(methodSection);
-    
-    // 添加实证分析章节标题
-    const analysisHeaderSection = document.createElement('div');
-    analysisHeaderSection.style.pageBreakBefore = 'always';
-    
-    // 获取AI生成的实证分析引言
-    addLog(`🤖 正在生成实证分析引言...`);
-    loadingText.value = '正在生成实证分析引言...';
-    const analysisIntroContent = await getAIGeneratedContent('analysis_intro', selectedIPs.value.length, filteredThirdIndicators.value.length);
-    
-    analysisHeaderSection.innerHTML = `
-      <div style="margin-bottom: 30px;">
-        ${analysisIntroContent}
-      </div>
-    `;
-    tempContainer.appendChild(analysisHeaderSection);
-    
-    // 处理每个图表
-    let processedCharts = 0;
-    
-    for (const chart of validCharts) {
-      try {
-        processedCharts++;
-        const chineseTitle = chart.title;
-        loadingText.value = `处理图表 ${processedCharts}/${validCharts.length}: ${chineseTitle}`;
-        
-        let imageDataUrl: string | null = null;
-        
-        if (chart.id === 'cluster') {
-          const imgElement = document.querySelector('.ml-chart-image img') as HTMLImageElement;
-          if (imgElement && imgElement.src) {
-            imageDataUrl = imgElement.src;
-            addLog(`✅ 获取聚类图片: ${chineseTitle}`);
-          }
-        } else {
-          addLog(`🔄 准备导出图表 (${processedCharts}/${validCharts.length}): ${chineseTitle}`);
-          
-          activeChart.value = chart.id;
-          await nextTick();
-          
-          // 强制等待更长时间确保图表完全渲染
-          let waitTime = chart.id === 'shap' ? 20000 : chart.id === 'neural' || chart.id === 'importance' ? 15000 : 10000;
-          addLog(`⏳ 等待图表渲染 (${waitTime/1000}秒): ${chineseTitle}`);
-          loadingText.value = `等待图表渲染 ${Math.ceil(waitTime/1000)}秒: ${chineseTitle}`;
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          await nextTick();
-          
-          // 强制重新渲染当前图表
-          addLog(`🔄 强制重新渲染图表: ${chineseTitle}`);
-          switch (chart.id) {
-            case 'fitness':
-              renderFitnessChart();
-              break;
-            case 'scores':
-              renderScoreChart();
-              break;
-            case 'radar':
-              renderRadarChart();
-              break;
-            case 'neural':
-              renderNeuralNetworkCharts();
-              break;
-            case 'importance':
-              renderNeuralNetworkCharts();
-              break;
-            case 'shap':
-              renderSHAPChart();
-              break;
-            case 'pca':
-              renderPCAChart();
-              break;
-          }
-          
-          // 再次等待渲染完成 - 更长时间
-          addLog(`⏳ 等待重新渲染完成: ${chineseTitle}`);
-          await new Promise(resolve => setTimeout(resolve, 8000)); // 增加到8秒
-          await nextTick();
-          
-          // 修复canvas ID匹配问题
-          let canvasId = '';
-          switch (chart.id) {
-            case 'fitness':
-              canvasId = 'fitnessChart';
-              break;
-            case 'scores':
-              canvasId = 'scoreChart';
-              break;
-            case 'radar':
-              canvasId = 'radarChart';
-              break;
-            case 'neural':
-              canvasId = 'nnLossChart'; // 修复神经网络图表ID
-              break;
-            case 'importance':
-              canvasId = 'featureImportanceChart';
-              break;
-            case 'shap':
-              canvasId = 'shapChart';
-              break;
-            case 'pca':
-              canvasId = 'pcaChart';
-              break;
-            default:
-              canvasId = `${chart.id}Chart`;
-          }
-          
-          // 多次重试获取图表
-          let retryCount = 0;
-          const maxRetries = 3;
-          
-          while (retryCount < maxRetries && (!imageDataUrl || imageDataUrl === 'data:,')) {
-            retryCount++;
-            addLog(`🔄 第${retryCount}次尝试获取图表: ${chineseTitle}`);
-            
-            // 每次重试前先等待更长时间
-            if (retryCount > 1) {
-              addLog(`⏳ 重试等待 5秒...`);
-              await new Promise(resolve => setTimeout(resolve, 5000));
-            }
-            
-            const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
-            addLog(`🔍 查找Canvas元素: ${canvasId}`);
-            
-            if (canvas) {
-              addLog(`✅ 找到Canvas元素: ${canvasId}, 尺寸: ${canvas.width}x${canvas.height}`);
-              
-              // 检查Canvas是否有实际内容
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const hasContent = imageData.data.some(value => value !== 0);
-                addLog(`Canvas内容检查: ${hasContent ? '有内容' : '空白'}, 总像素: ${imageData.data.length/4}`);
-                
-                if (!hasContent && retryCount < maxRetries) {
-                  addLog(`⚠️ Canvas内容为空，强制重新渲染...`);
-                  renderSpecificChart(chart.id);
-                  await new Promise(resolve => setTimeout(resolve, 6000)); // 等待6秒重新渲染
-                  continue; // 跳到下一次重试
-                }
-              }
-              
-              // 检查Chart.js实例
-              const chartInstance = Chart.getChart(canvas);
-              if (chartInstance) {
-                addLog(`✅ 找到Chart.js实例: ${chineseTitle}`);
-                
-                // 强制更新图表
-                try {
-                  chartInstance.update('none'); // 立即更新，不使用动画
-                  await new Promise(resolve => setTimeout(resolve, 2000)); // 等待更新完成
-                  
-                  // 使用Chart.js的toBase64Image方法（更可靠）
-                  imageDataUrl = chartInstance.toBase64Image('image/png', 1.0);
-                  addLog(`✅ 通过Chart.js实例获取图表数据: ${chineseTitle} (重试${retryCount}次)`);
-                  break; // 成功获取，退出重试循环
-                } catch (chartError) {
-                  addLog(`⚠️ Chart.js导出失败（重试${retryCount}），错误: ${chartError}`);
-                }
-              }
-              
-              // 如果Chart.js方法失败，尝试Canvas方法
-              if (ctx) {
-                try {
-                  imageDataUrl = canvas.toDataURL('image/png', 1.0);
-                  addLog(`✅ 通过Canvas方法获取图表数据: ${chineseTitle} (重试${retryCount}次)`);
-                  break; // 成功获取，退出重试循环
-                } catch (canvasError) {
-                  addLog(`❌ Canvas导出失败（重试${retryCount}），错误: ${canvasError}`);
-                }
-              }
-            } else {
-              addLog(`❌ 未找到Canvas元素: ${canvasId} (重试${retryCount}次)`);
-              
-              if (retryCount === 1) {
-                // 第一次重试时显示所有canvas元素
-                const allCanvases = document.querySelectorAll('canvas');
-                addLog(`页面中共有 ${allCanvases.length} 个Canvas元素`);
-                allCanvases.forEach((c, index) => {
-                  addLog(`Canvas ${index}: id="${c.id}", class="${c.className}"`);
-                });
-              }
-            }
-          }
-          
-          // 如果重试后仍然失败，最后一次尝试使用html2canvas
-          if ((!imageDataUrl || imageDataUrl === 'data:,') && chart.id !== 'cluster') {
-            addLog(`🎯 最后尝试：使用html2canvas捕获图表区域: ${chineseTitle}`);
-            try {
-              const chartPanel = document.querySelector(`[v-show="${activeChart.value === chart.id}"] .chart, .chart-panel:not([style*="display: none"]) .chart`) as HTMLElement;
-              if (chartPanel) {
-                const chartCanvas = await html2canvas(chartPanel, {
-                  scale: 2,
-                  backgroundColor: '#ffffff',
-                  useCORS: true,
-                  allowTaint: true
-                });
-                imageDataUrl = chartCanvas.toDataURL('image/png', 1.0);
-                addLog(`✅ html2canvas成功捕获图表: ${chineseTitle}`);
-              }
-            } catch (html2canvasError) {
-              addLog(`❌ html2canvas也失败了: ${chineseTitle}, 错误: ${html2canvasError}`);
-            }
-          }
-        }
-        
-        if (imageDataUrl && imageDataUrl !== 'data:,') {
-          // 获取学术化的分析内容
-          addLog(`📝 正在为图表 "${chineseTitle}" 生成学术分析...`);
-          loadingText.value = `生成学术分析 ${processedCharts}/${validCharts.length}: ${chineseTitle}`;
-          
-          let academicAnalysis = '';
-          try {
-            academicAnalysis = await getAcademicAnalysis(chart.id);
-            addLog(`✅ 学术分析已生成: ${chineseTitle}`);
-          } catch (error) {
-            console.warn(`学术分析失败 for ${chineseTitle}:`, error);
-            academicAnalysis = getDefaultAcademicAnalysis(chart.id);
-          }
-          
-          // 创建学术化的图表分析段落
-          const chartSection = document.createElement('div');
-          chartSection.style.marginBottom = '35px';
-          chartSection.innerHTML = `
-            <div style="margin-bottom: 25px;">
-              <h3 style="font-size: 16px; color: #2c3e50; margin-bottom: 15px;">${getAcademicSectionTitle(chart.id)}</h3>
-              
-              <div style="text-align: center; margin: 20px 0;">
-                <img src="${imageDataUrl}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
-                <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px; font-style: italic;">
-                  图${processedCharts}. ${chineseTitle}
-                </p>
-              </div>
-              
-              <div style="text-align: justify; line-height: 1.8; margin-top: 15px;">
-                ${academicAnalysis}
-              </div>
-            </div>
-          `;
-          tempContainer.appendChild(chartSection);
-          
-          addLog(`✅ 已添加学术分析到论文: ${chineseTitle}`);
-        } else {
-          addLog(`❌ 最终未能获取图表: ${chineseTitle} - 将添加重试提示`);
-          
-          // 生成分析但提示图表获取失败
-          let academicAnalysis = '';
-          try {
-            academicAnalysis = await getAcademicAnalysis(chart.id);
-            addLog(`✅ 文本分析已生成: ${chineseTitle}`);
-          } catch (error) {
-            console.warn(`文本分析失败 for ${chineseTitle}:`, error);
-            academicAnalysis = getDefaultAcademicAnalysis(chart.id);
-          }
-          
-          // 创建包含重试提示的分析段落
-          const chartSection = document.createElement('div');
-          chartSection.style.marginBottom = '35px';
-          chartSection.innerHTML = `
-            <div style="margin-bottom: 25px;">
-              <h3 style="font-size: 16px; color: #2c3e50; margin-bottom: 15px;">${getAcademicSectionTitle(chart.id)}</h3>
-              
-              <div style="padding: 30px; background: linear-gradient(135deg, #ffebe6 0%, #fff2e6 100%); border-radius: 12px; border: 2px solid #ff6b6b; text-align: center; margin: 20px 0; box-shadow: 0 4px 8px rgba(255,107,107,0.2);">
-                <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
-                <h4 style="color: #e74c3c; margin: 10px 0; font-size: 16px; font-weight: bold;">图表获取失败</h4>
-                <p style="margin: 8px 0; font-size: 14px; color: #666; line-height: 1.5;">
-                  <strong>建议解决方案：</strong><br>
-                  1. 确保所有图表在界面中完全显示<br>
-                  2. 等待更长时间后重新导出<br>
-                  3. 刷新页面重新分析后导出
-                </p>
-                <p style="margin: 8px 0; font-size: 12px; color: #999; font-style: italic;">
-                  图表类型：${chineseTitle} | Canvas ID: ${chart.id}Chart
-                </p>
-              </div>
-              
-              <div style="text-align: justify; line-height: 1.8; margin-top: 15px;">
-                <div style="padding: 15px; background: #f8f9fa; border-left: 4px solid #007bff; margin-bottom: 15px;">
-                  <strong style="color: #007bff;">💡 基于数据的分析结果：</strong>
-                </div>
-                ${academicAnalysis}
-              </div>
-            </div>
-          `;
-          tempContainer.appendChild(chartSection);
-          
-          addLog(`⚠️ 已添加重试提示和分析到论文: ${chineseTitle}`);
-        }
-      } catch (error) {
-        const chineseTitle = chart.title;
-        addLog(`❌ 处理图表失败: ${chineseTitle}`);
-      }
-    }
-    
-    // 添加品牌塑造路径章节（AI生成）
-    addLog(`🤖 正在生成品牌塑造路径设计...`);
-    loadingText.value = '正在生成品牌塑造路径设计...';
-    const brandingPathContent = await getAIGeneratedContent('branding_path', selectedIPs.value.length, filteredThirdIndicators.value.length);
-    
-    const brandingPathSection = document.createElement('div');
-    brandingPathSection.style.pageBreakBefore = 'always';
-    brandingPathSection.innerHTML = `
-      <div style="margin-bottom: 40px;">
-        ${brandingPathContent}
-      </div>
-    `;
-    tempContainer.appendChild(brandingPathSection);
-    
-    // 添加政策建议章节（AI生成）
-    addLog(`🤖 正在生成政策建议与实践指导...`);
-    loadingText.value = '正在生成政策建议与实践指导...';
-    const policySuggestionsContent = await getAIGeneratedContent('policy_suggestions', selectedIPs.value.length, filteredThirdIndicators.value.length);
-    
-    const policySection = document.createElement('div');
-    policySection.style.pageBreakBefore = 'always';
-    policySection.innerHTML = `
-      <div style="margin-bottom: 40px;">
-        ${policySuggestionsContent}
-      </div>
-    `;
-    tempContainer.appendChild(policySection);
-    
-    // 添加结论章节（AI生成）
-    addLog(`🤖 正在生成结论与展望...`);
-    loadingText.value = '正在生成结论与展望...';
-    const conclusionContent = await getAIGeneratedContent('conclusion', selectedIPs.value.length, filteredThirdIndicators.value.length);
-    
-    const conclusionSection = document.createElement('div');
-    conclusionSection.style.pageBreakBefore = 'always';
-    conclusionSection.innerHTML = `
-      <div style="margin-bottom: 40px;">
-        ${conclusionContent}
-      </div>
-    `;
-    tempContainer.appendChild(conclusionSection);
-    
-    // 恢复原来的激活图表
-    activeChart.value = originalActiveChart;
-    
-    // 使用html2canvas转换为图片然后生成PDF
-    loadingText.value = '正在生成PDF文件...';
-    addLog(`📄 开始转换HTML为PDF...`);
-    
-    const canvas = await html2canvas(tempContainer, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      width: tempContainer.scrollWidth,
-      height: tempContainer.scrollHeight
-    });
-    
-    // 清理临时容器
-    document.body.removeChild(tempContainer);
-    
-    // 创建PDF
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
-    
-    const imgData = canvas.toDataURL('image/png');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-    
-    // 如果内容超过一页，需要分页
-    let heightLeft = imgHeight;
-    let position = 0;
-    
-    // 添加第一页
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pdfHeight;
-    
-    // 添加后续页面
-    while (heightLeft >= 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-    }
-    
-    // 生成文件名
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-    const fileName = `基于多维评价体系的少数民族体育IP品牌塑造路径研究_${dateStr}_${timeStr}.pdf`;
-    
-    // 保存PDF
-    pdf.save(fileName);
-    
-    addLog(`🎉 PDF导出成功: ${fileName} (包含 ${validCharts.length} 个图表)`);
-    addLog(`📄 PDF完美支持中文显示，包含详细AI分析`);
-    addLog(`🤖 每个图表都包含专业中文AI分析`);
-    toast.success(`PDF导出成功！包含 ${validCharts.length} 个图表和中文AI分析`);
-    
+    await ExportService.performPDFExport(
+      selectedChartIds,
+      hasAnalysisResults.value,
+      selectedIPs.value,
+      filteredThirdIndicators.value,
+      chartTabs.value,
+      evaluationResult.value,
+      neuralNetworkResult.value,
+      shapResult.value,
+      pcaResult.value,
+      advancedClusterResult.value,
+      advancedClusterImage.value,
+      activeChart,
+      isChartAnalysisMode.value,
+      addLog,
+      (loadingValue: boolean) => { loading.value = loadingValue; },
+      (text: string) => { loadingText.value = text; }
+    );
   } catch (error) {
     console.error('PDF导出失败:', error);
     addLog(`❌ PDF导出失败: ${error}`);
-    toast.fail('PDF导出失败，请重试');
   } finally {
     loading.value = false;
     loadingText.value = '';
@@ -2133,172 +1343,21 @@ const exportToPDF = async () => {
 
 // Excel导出功能
 const exportToExcel = async () => {
-  if (!hasAnalysisResults.value) {
-    toast.warning('请先进行全面分析后再导出Excel');
-    return;
-  }
-  
   try {
-    loading.value = true;
-    loadingText.value = '准备导出Excel...';
-    
-    addLog('🚀 开始Excel导出流程');
-    addLog(`📊 导出分析的 ${selectedIPs.value.length} 个IP数据`);
-    
-    // 准备Excel数据
-    const excelData = [];
-    
-    // 获取中文指标名称
-    const chineseIndicatorNames = filteredThirdIndicators.value.length > 0 
-      ? filteredThirdIndicators.value 
-      : indicatorStructure.value.allThird || [];
-    
-    // 添加标题行
-    const headers = [
-      '项目名称', '专家', '组别', 
-      ...chineseIndicatorNames
-    ];
-    excelData.push(headers);
-    
-    // 处理每个选中的IP
-    for (const ipId of selectedIPs.value) {
-      const ip = ips.value.find(item => item.id === ipId);
-      if (!ip) continue;
-      
-      if (ip._isGroup) {
-        // 多专家聚合记录，获取每个专家的具体评分
-        try {
-          const expertsResponse = await ipApi.getExpertScoresByIP(ip.project_name, ip.group_name);
-          if (expertsResponse.data && expertsResponse.data.length > 0) {
-            const expertScores = expertsResponse.data;
-            
-            // 为每个专家添加一行数据
-            expertScores.forEach(expert => {
-              const row: any[] = [
-                ip.project_name || '',
-                expert.expert || '',
-                ip.group_name || ''
-              ];
-              
-              // 添加指标数据（使用中文名称对应的数值）
-              chineseIndicatorNames.forEach(chineseName => {
-                // 通过中文名称找到对应的属性名
-                const propertyName = indicatorStructure.value.indicatorPropertyMap?.[chineseName];
-                const value = expert.indicators && propertyName 
-                  ? expert.indicators[propertyName] || 0 
-                  : 0;
-                row.push(Number(value));
-              });
-              
-              excelData.push(row);
-            });
-            
-            // 添加平均值行
-            const avgRow: any[] = [
-              ip.project_name || '',
-              `${expertScores.length}位专家平均`,
-              ip.group_name || ''
-            ];
-            
-            // 计算平均值
-            chineseIndicatorNames.forEach(chineseName => {
-              const propertyName = indicatorStructure.value.indicatorPropertyMap?.[chineseName];
-              if (propertyName) {
-                const sum = expertScores.reduce((acc, expert) => {
-                  return acc + (expert.indicators[propertyName] || 0);
-                }, 0);
-                const avgValue = sum / expertScores.length;
-                avgRow.push(Number(avgValue.toFixed(2)));
-              } else {
-                avgRow.push(0);
-              }
-            });
-            
-            excelData.push(avgRow);
-            
-            // 添加空行分隔
-            excelData.push(Array(headers.length).fill(''));
-            
-          }
-        } catch (error) {
-          addLog(`⚠️ 获取IP "${ip.project_name}" 的专家数据失败`);
-        }
-      } else {
-        // 单一专家记录
-        const row: any[] = [
-          ip.project_name || '',
-          ip.expert || '',
-          ip.group_name || ''
-        ];
-        
-        // 添加指标数据
-        chineseIndicatorNames.forEach(chineseName => {
-          const propertyName = indicatorStructure.value.indicatorPropertyMap?.[chineseName];
-          const value = ip.indicators && propertyName 
-            ? ip.indicators[propertyName] || 0 
-            : 0;
-          row.push(Number(value));
-        });
-        
-        excelData.push(row);
-      }
-    }
-    
-    // 创建工作簿
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(excelData);
-    
-    // 设置列宽
-    const colWidths = [
-      {wch: 25}, // 项目名称
-      {wch: 15}, // 专家
-      {wch: 15}, // 组别
-      ...Array(chineseIndicatorNames.length).fill({wch: 12}) // 指标列
-    ];
-    ws['!cols'] = colWidths;
-    
-    // 添加工作表到工作簿
-    XLSX.utils.book_append_sheet(wb, ws, '分析数据详情');
-    
-    // 如果有分析结果，添加分析结果工作表
-    if (evaluationResult.value?.evaluation) {
-      const analysisData = [];
-      analysisData.push(['排名', '项目名称', '综合评分', '误差值']);
-      
-      evaluationResult.value.evaluation
-        .sort((a: any, b: any) => b.score - a.score)
-        .forEach((item: any, index: number) => {
-          analysisData.push([
-            index + 1,
-            item.name,
-            Number(item.score.toFixed(4)),
-            item.error ? Number(item.error.toFixed(4)) : 'N/A'
-          ]);
-        });
-      
-      const analysisWs = XLSX.utils.aoa_to_sheet(analysisData);
-      analysisWs['!cols'] = [{wch: 8}, {wch: 25}, {wch: 12}, {wch: 12}];
-      XLSX.utils.book_append_sheet(wb, analysisWs, '综合评分排名');
-    }
-    
-    // 生成文件名
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-    const fileName = `IP-Analysis-Data_${dateStr}_${timeStr}.xlsx`;
-    
-    // 保存文件
-    XLSX.writeFile(wb, fileName);
-    
-    addLog(`🎉 Excel导出成功: ${fileName}`);
-    addLog(`📋 包含 ${selectedIPs.value.length} 个IP的详细分析数据`);
-    addLog(`📊 使用中文指标名称，包含多专家具体评分`);
-    toast.success(`Excel导出成功！包含 ${selectedIPs.value.length} 个IP的详细数据`);
-    
+    await ExportService.exportToExcel(
+      hasAnalysisResults.value,
+      selectedIPs.value,
+      ips.value,
+      indicatorStructure.value,
+      filteredThirdIndicators.value,
+      evaluationResult.value,
+      (loadingValue: boolean) => { loading.value = loadingValue; },
+      (text: string) => { loadingText.value = text; },
+      addLog
+    );
   } catch (error) {
     console.error('Excel导出失败:', error);
     addLog(`❌ Excel导出失败: ${error}`);
-    toast.fail('Excel导出失败，请重试');
   } finally {
     loading.value = false;
     loadingText.value = '';
@@ -3020,6 +2079,111 @@ const startNewChat = () => {
   // 记录日志
   addLog('🆕 AI对话已重置，开始新的分析会话');
 };
+
+const showChartSelectionDialog = ref(false);
+const selectedChartsForExport = ref<string[]>([]);
+
+// 可用图表的计算属性，包含更详细的描述信息
+const availableCharts = computed(() => [
+  {
+    id: 'fitness',
+    title: '适应度变化曲线',
+    icon: '📈',
+    disabled: !evaluationResult.value || evaluationResult.value.fitnessHistory.length === 0,
+    description: '显示遗传算法优化过程中适应度的变化趋势'
+  },
+  {
+    id: 'scores',
+    title: 'IP评分分布',
+    icon: '📊',
+    disabled: !evaluationResult.value || evaluationResult.value.evaluation.length === 0,
+    description: '展示各个IP项目的综合评分分布情况'
+  },
+  {
+    id: 'radar',
+    title: '重要指标影响雷达图',
+    icon: '🎯',
+    disabled: !evaluationResult.value || evaluationResult.value.weights.length === 0,
+    description: '通过雷达图展示各指标的权重分布和重要性'
+  },
+  {
+    id: 'neural',
+    title: '神经网络训练损失',
+    icon: '🧠',
+    disabled: !neuralNetworkResult.value || selectedIPs.value.length < 5,
+    description: '显示神经网络模型训练过程中的损失函数变化'
+  },
+  {
+    id: 'importance',
+    title: '特征重要性分析',
+    icon: '⚖️',
+    disabled: !neuralNetworkResult.value || selectedIPs.value.length < 5,
+    description: '分析各个特征指标对模型预测结果的重要程度'
+  },
+  {
+    id: 'shap',
+    title: 'SHAP特征贡献度蜂群图',
+    icon: '🔍',
+    disabled: !shapResult.value || selectedIPs.value.length < 3,
+    description: '使用SHAP方法解释模型决策过程和特征贡献'
+  },
+  {
+    id: 'pca',
+    title: 'PCA降维可视化',
+    icon: '🔀',
+    disabled: !pcaResult.value || selectedIPs.value.length < 2,
+    description: '通过主成分分析将高维数据降维并可视化'
+  },
+  {
+    id: 'cluster',
+    title: '高级聚类分析',
+    icon: '🎭',
+    disabled: !advancedClusterImage.value,
+    description: '对IP项目进行聚类分析，发现潜在的分组模式'
+  }
+]);
+
+const availableEnabledCharts = computed(() => availableCharts.value.filter(chart => !chart.disabled));
+
+const selectAllCharts = () => {
+  if (selectedChartsForExport.value.length === availableEnabledCharts.value.length) {
+    // 如果已经全选，则取消全选
+    selectedChartsForExport.value = [];
+  } else {
+    // 否则全选所有可用图表
+    selectedChartsForExport.value = availableEnabledCharts.value.map(chart => chart.id);
+  }
+};
+
+const closeChartSelectionDialog = () => {
+  showChartSelectionDialog.value = false;
+};
+
+const confirmExportPDF = async () => {
+  showChartSelectionDialog.value = false;
+  
+  if (selectedChartsForExport.value.length === 0) {
+    toast.warning('请至少选择一个图表导出');
+    return;
+  }
+  
+  // 调用实际的PDF导出逻辑，传入选中的图表
+  await performPDFExport(selectedChartsForExport.value);
+};
+
+// 更新筛选指标
+const updateFilteredIndicators = async () => {
+  try {
+    filteredThirdIndicators.value = await DataService.updateFilteredIndicators(
+      selectedFirstLevel.value,
+      selectedSecondLevel.value
+    );
+    addLog(`已筛选出${filteredThirdIndicators.value.length}个三级指标`);
+  } catch (error) {
+    console.error('更新筛选指标失败:', error);
+    addLog(`筛选指标失败: ${error}`);
+  }
+};
 </script>
 
 <style scoped>
@@ -3197,7 +2361,7 @@ const startNewChat = () => {
 .chart-tabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 20px;
+  margin: 20px 0;
   padding: 10px;
   background: #f8f9fa;
   border-radius: 12px;
@@ -4729,5 +3893,208 @@ const startNewChat = () => {
   display: flex !important;
   align-items: center !important;
   gap: 0 !important;
+}
+
+.chart-selection-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+}
+
+.chart-selection-dialog {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 800px;
+  max-height: 80vh;
+  overflow: hidden;
+  animation: ai-dialog-enter 0.3s ease-out;
+}
+
+@keyframes ai-dialog-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.dialog-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #ff7b72 0%, #ff6b6b 100%);
+  color: white;
+}
+
+.dialog-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.dialog-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.dialog-content {
+  padding: 24px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.dialog-description {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 15px;
+}
+
+.chart-selection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.chart-selection-item {
+  display: flex;
+  align-items: center;
+}
+
+.chart-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.chart-checkbox-label:hover {
+  background: rgba(102,126,234,0.1);
+}
+
+.chart-info {
+  flex: 1;
+}
+
+.chart-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.chart-icon {
+  font-size: 18px;
+}
+
+.chart-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.chart-description {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+  padding-left: 0;
+}
+
+.disabled-reason {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.selection-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.selection-summary p {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 15px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+  text-align: center;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 11px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+  color: white;
+  font-weight: 600;
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+  color: white;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 </style> 
