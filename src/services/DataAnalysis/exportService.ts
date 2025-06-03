@@ -378,14 +378,14 @@ export class ExportService {
     
     // 增加等待时间 - 确保图表完全渲染
     const waitTimeMap: Record<string, number> = {
-      'shap': 12000,       // SHAP图表最复杂，需要更多时间
-      'radar': 10000,      // 雷达图有线条和多个点，需要更多时间
-      'importance': 9000,  // 特征重要性图表，柱状图+标签
-      'neural': 8000,      // 神经网络图表
-      'pca': 6000,         // PCA图表
-      'cluster': 6000,     // 聚类图表
-      'fitness': 5000,     // 适应度曲线
-      'scores': 5000,      // 评分分布
+      'shap': 15000,       // SHAP图表最复杂，需要更多时间
+      'importance': 15000, // 特征重要性图表，柱状图+标签，增加到12秒
+      'radar': 15000,      // 雷达图有线条和多个点，需要更多时间
+      'neural': 15000,      // 神经网络图表
+      'pca': 15000,         // PCA图表
+      'cluster': 15000,     // 聚类图表
+      'fitness': 15000,     // 适应度曲线
+      'scores': 15000,      // 评分分布
     };
     
     const waitTime = waitTimeMap[chart.id] || 5000;
@@ -508,7 +508,7 @@ export class ExportService {
   // 新增：动态等待图表渲染完成
   private static async waitForChartToRender(chartId: string, addLog: (message: string) => void): Promise<void> {
     const canvasId = ChartService.getCanvasId(chartId);
-    const maxWaitTime = 10000; // 最大等待10秒
+    const maxWaitTime = 15000; // 最大等待15秒，给复杂图表更多时间
     const checkInterval = 500;  // 每500ms检查一次
     let waitedTime = 0;
     
@@ -560,7 +560,7 @@ export class ExportService {
                   ).length;
                   
                   // 特征重要性图应该有足够的彩色像素（柱状图）
-                  if (coloredPixels > 800) {
+                  if (coloredPixels > 500) {
                     addLog(`✅ 特征重要性图渲染检查通过: ${chartId} (耗时${waitedTime}ms, 彩色像素数${coloredPixels})`);
                     return;
                   } else {
