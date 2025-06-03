@@ -21,7 +21,7 @@ export class ExportService {
     shapResult: any,
     pcaResult: any,
     advancedClusterResult: any,
-    advancedClusterImage: string,
+    // advancedClusterImage: string, // 暂时不使用
     activeChart: any,
     isChartAnalysisMode: boolean,
     addLog: (message: string) => void,
@@ -55,43 +55,21 @@ export class ExportService {
       addLog(`📊 用户选择图表: ${selectedChartIds.length} 个`);
       addLog(`✅ 实际导出图表: ${validCharts.length} 个`);
       addLog(`📋 图表列表: ${validCharts.map(c => c.title).join(', ')}`);
-      addLog(`⏰ 预计需要 ${Math.ceil(validCharts.length * 6)} 秒完成（包含AI分析）`);
+      addLog(`⏰ 预计需要 ${Math.ceil(validCharts.length * 2)} 秒完成（优化后）`);
       addLog(`💡 使用HTML转PDF方式，完美支持中文显示`);
       addLog(`🤖 每个图表都将生成专业AI分析`);
-      addLog(`⚡ 正在处理复杂图表，请耐心等待...`);
       
-      // 确保所有图表都已正确渲染后再开始导出
+      // 简化的图表状态检查 - 只做基本检查
       addLog(`🔍 开始图表状态检查...`);
       setLoadingText('检查图表状态...');
       
-      for (const chart of validCharts) {
-        if (!chart.condition) continue;
-        
-        // 切换到对应图表
-        activeChart.value = chart.id;
+      // 确保当前是在合适的图表上
+      if (validCharts.length > 0) {
+        activeChart.value = validCharts[0].id;
         await nextTick();
-        await new Promise(resolve => setTimeout(resolve, 3000)); // 增加到3秒等待切换
-        
-        // 检查图表是否可见和有内容
-        const canvasId = ChartService.getCanvasId(chart.id);
-        const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
-        
-        if (canvas) {
-          const chartInstance = Chart.getChart(canvas);
-          if (chartInstance && chartInstance.data && chartInstance.data.datasets && chartInstance.data.datasets.length > 0) {
-            addLog(`✅ 图表状态正常: ${AIService.getChineseChartTitle(chart.id)}`);
-          } else {
-            addLog(`⚠️ 图表可能需要重新渲染: ${AIService.getChineseChartTitle(chart.id)}`);
-            // 强制重新渲染
-            ChartService.renderSpecificChart(chart.id, evaluationResult, neuralNetworkResult, shapResult, pcaResult, filteredThirdIndicators, []);
-            await new Promise(resolve => setTimeout(resolve, 5000)); // 重新渲染后等待5秒
-          }
-        } else {
-          addLog(`⚠️ 图表Canvas未找到: ${AIService.getChineseChartTitle(chart.id)}`);
-        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 简短等待
+        addLog(`✅ 图表环境已准备就绪`);
       }
-      
-      addLog(`✅ 图表状态检查完成，开始导出...`);
       
       // 创建临时容器来放置PDF内容
       const tempContainer = document.createElement('div');
@@ -342,8 +320,8 @@ export class ExportService {
         
         if (imageDataUrl && imageDataUrl !== 'data:,') {
           // 获取学术化的分析内容
-          addLog(`📝 正在为图表 "${chineseTitle}" 生成学术分析...`);
-          setLoadingText(`生成学术分析 ${processedCharts}/${validCharts.length}: ${chineseTitle}`);
+          addLog(`📝 生成学术分析: ${chineseTitle}`);
+          setLoadingText(`生成学术分析: ${chineseTitle}`);
           
           let academicAnalysis = '';
           try {
@@ -360,15 +338,16 @@ export class ExportService {
               isChartAnalysisMode,
               selectedChartIds // 传递选中图表ID列表
             );
-            addLog(`✅ 学术分析已生成: ${chineseTitle}`);
+            addLog(`✅ 分析完成: ${chineseTitle}`);
           } catch (error) {
             console.warn(`学术分析失败 for ${chineseTitle}:`, error);
             academicAnalysis = AIService.getDefaultAcademicAnalysis(chart.id);
+            addLog(`⚠️ 使用默认分析: ${chineseTitle}`);
           }
           
           // 创建学术化的图表分析段落
           this.addChartSectionToPDF(tempContainer, chart, chineseTitle, imageDataUrl, academicAnalysis, processedCharts, selectedChartIds);
-          addLog(`✅ 已添加学术分析到论文: ${chineseTitle}`);
+          addLog(`✅ 图表已加入PDF: ${chineseTitle}`);
         } else {
           this.addFailedChartSectionToPDF(tempContainer, chart, chineseTitle, processedCharts, evaluationResult, neuralNetworkResult, shapResult, pcaResult, advancedClusterResult, filteredThirdIndicators.length, selectedChartTabs, isChartAnalysisMode, addLog, selectedChartIds);
         }
@@ -379,7 +358,7 @@ export class ExportService {
     }
   }
 
-  // 捕获图表图像
+  // 捕获图表图像 - 优化版本
   private static async captureChartImage(
     chart: any, 
     activeChart: any, 
@@ -391,78 +370,89 @@ export class ExportService {
     addLog: (message: string) => void
   ): Promise<string | null> {
     const chineseTitle = chart.title;
-    addLog(`🔄 准备导出图表: ${chineseTitle}`);
+    addLog(`🔄 开始处理图表: ${chineseTitle}`);
     
     // 切换到对应图表
     activeChart.value = chart.id;
     await nextTick();
     
-    // 根据图表类型设置不同的等待时间
-    let waitTime = 8000; // 默认8秒
-    switch (chart.id) {
-      case 'shap':
-        waitTime = 25000; // SHAP图表需要更长时间
-        break;
-      case 'neural':
-      case 'importance':
-        waitTime = 18000; // 神经网络相关图表
-        break;
-      case 'pca':
-      case 'cluster':
-        waitTime = 15000; // PCA和聚类图表
-        break;
-      case 'fitness':
-      case 'scores':
-      case 'radar':
-        waitTime = 10000; // 基础图表
-        break;
-    }
+    // 优化等待时间策略 - 根据图表复杂度设置合理的等待时间
+    const waitTimeMap: Record<string, number> = {
+      'shap': 8000,        // SHAP图表稍微复杂
+      'neural': 5000,      // 神经网络图表
+      'importance': 5000,  // 特征重要性
+      'pca': 4000,         // PCA图表
+      'cluster': 4000,     // 聚类图表
+      'fitness': 3000,     // 适应度曲线
+      'scores': 3000,      // 评分分布
+      'radar': 3000        // 雷达图
+    };
     
-    addLog(`⏳ 等待图表渲染 (${waitTime/1000}秒): ${chineseTitle}`);
+    const waitTime = waitTimeMap[chart.id] || 3000;
+    addLog(`⏳ 等待图表渲染完成 (${waitTime/1000}秒): ${chineseTitle}`);
     await new Promise(resolve => setTimeout(resolve, waitTime));
-    await nextTick();
-    
-    // 强制重新渲染当前图表
-    addLog(`🔄 强制重新渲染图表: ${chineseTitle}`);
-    try {
-      const allThird = filteredThirdIndicators.length > 0 ? filteredThirdIndicators : [];
-      ChartService.renderSpecificChart(
-        chart.id, 
-        evaluationResult, 
-        neuralNetworkResult, 
-        shapResult, 
-        pcaResult, 
-        filteredThirdIndicators, 
-        allThird
-      );
-      
-      // 渲染后再等待一段时间
-      addLog(`⏳ 等待重新渲染完成: ${chineseTitle}`);
-      await new Promise(resolve => setTimeout(resolve, 8000));
-      await nextTick();
-    } catch (error) {
-      addLog(`⚠️ 重新渲染失败: ${chineseTitle}, ${error}`);
-    }
     
     const canvasId = ChartService.getCanvasId(chart.id);
     let imageDataUrl: string | null = null;
     
-    // 智能重试机制
-    let retryCount = 0;
-    const maxRetries = 5; // 增加重试次数
+    // 简化的重试机制 - 最多2次重试
+    const maxRetries = 2;
     
-    while (retryCount < maxRetries && (!imageDataUrl || imageDataUrl === 'data:,')) {
-      retryCount++;
-      addLog(`🔄 第${retryCount}次尝试获取图表: ${chineseTitle}`);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      addLog(`🎯 第${attempt}次尝试获取图表: ${chineseTitle}`);
       
-      if (retryCount > 1) {
-        const retryWaitTime = retryCount * 3000; // 递增等待时间
-        addLog(`⏳ 重试等待 ${retryWaitTime/1000}秒...`);
-        await new Promise(resolve => setTimeout(resolve, retryWaitTime));
-        
-        // 重试时再次强制渲染
+      // 如果是重试，稍微等待一下
+      if (attempt > 1) {
+        addLog(`⏳ 重试前等待2秒...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      
+      const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
+      
+      if (!canvas) {
+        addLog(`❌ Canvas未找到: ${canvasId} (尝试${attempt}/${maxRetries})`);
+        continue;
+      }
+      
+      // 检查Canvas基本状态
+      if (canvas.width < 50 || canvas.height < 50) {
+        addLog(`⚠️ Canvas尺寸异常: ${canvas.width}x${canvas.height} (尝试${attempt}/${maxRetries})`);
+        continue;
+      }
+      
+      // 方法1: 优先使用Chart.js实例方法（最可靠）
+      const chartInstance = Chart.getChart(canvas);
+      if (chartInstance) {
         try {
-          const allThird = filteredThirdIndicators.length > 0 ? filteredThirdIndicators : [];
+          addLog(`✅ 使用Chart.js实例导出: ${chineseTitle}`);
+          imageDataUrl = chartInstance.toBase64Image('image/png', 0.9);
+          
+          if (this.isValidImageData(imageDataUrl)) {
+            addLog(`🎉 Chart.js方法成功: ${chineseTitle} (尝试${attempt}次)`);
+            break;
+          }
+        } catch (error) {
+          addLog(`⚠️ Chart.js方法失败: ${error}`);
+        }
+      }
+      
+      // 方法2: 使用Canvas原生方法
+      try {
+        addLog(`🔄 使用Canvas原生方法: ${chineseTitle}`);
+        imageDataUrl = canvas.toDataURL('image/png', 0.9);
+        
+        if (this.isValidImageData(imageDataUrl)) {
+          addLog(`🎉 Canvas方法成功: ${chineseTitle} (尝试${attempt}次)`);
+          break;
+        }
+      } catch (error) {
+        addLog(`⚠️ Canvas方法失败: ${error}`);
+      }
+      
+      // 如果两种方法都失败，且还有重试机会，强制重新渲染
+      if (attempt < maxRetries) {
+        addLog(`🔄 强制重新渲染图表: ${chineseTitle}`);
+        try {
           ChartService.renderSpecificChart(
             chart.id, 
             evaluationResult, 
@@ -470,161 +460,55 @@ export class ExportService {
             shapResult, 
             pcaResult, 
             filteredThirdIndicators, 
-            allThird
+            filteredThirdIndicators
           );
-          await new Promise(resolve => setTimeout(resolve, 5000));
-        } catch (error) {
-          addLog(`⚠️ 重试渲染失败: ${chineseTitle}, ${error}`);
-        }
-      }
-      
-      const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
-      addLog(`🔍 查找Canvas元素: ${canvasId}`);
-      
-      if (!canvas) {
-        addLog(`❌ 未找到Canvas元素: ${canvasId} (重试${retryCount}次)`);
-        continue;
-      }
-      
-      addLog(`✅ 找到Canvas元素: ${canvasId}, 尺寸: ${canvas.width}x${canvas.height}`);
-      
-      // 检查Canvas尺寸是否合理
-      if (canvas.width < 100 || canvas.height < 100) {
-        addLog(`⚠️ Canvas尺寸过小: ${canvas.width}x${canvas.height}, 可能未正确渲染`);
-        continue;
-      }
-      
-      // 检查Canvas是否有实际内容
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        try {
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imageData.data;
-          
-          // 检查是否有非透明像素
-          let hasContent = false;
-          let nonTransparentPixels = 0;
-          
-          for (let i = 3; i < data.length; i += 4) {
-            if (data[i] > 0) { // Alpha通道大于0表示非透明
-              nonTransparentPixels++;
-              if (nonTransparentPixels > 100) { // 至少要有100个非透明像素
-                hasContent = true;
-                break;
-              }
-            }
-          }
-          
-          if (!hasContent) {
-            addLog(`⚠️ Canvas内容为空或过少，跳过此次尝试: ${chineseTitle}`);
-            continue;
-          }
-          
-          addLog(`✅ Canvas内容检查通过: ${chineseTitle}, 非透明像素: ${nonTransparentPixels}+`);
-          
-        } catch (contentError) {
-          addLog(`⚠️ Canvas内容检查失败: ${chineseTitle}, ${contentError}`);
-        }
-      }
-      
-      // 优先使用Chart.js实例方法
-      const chartInstance = Chart.getChart(canvas);
-      if (chartInstance) {
-        addLog(`✅ 找到Chart.js实例: ${chineseTitle}`);
-        
-        try {
-          // 强制更新图表
-          chartInstance.update('none');
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // 使用Chart.js的导出方法
-          imageDataUrl = chartInstance.toBase64Image('image/png', 1.0);
-          
-          if (imageDataUrl && imageDataUrl !== 'data:,' && imageDataUrl.length > 1000) {
-            addLog(`✅ 通过Chart.js实例获取图表数据: ${chineseTitle} (重试${retryCount}次)`);
-            break;
-          } else {
-            addLog(`⚠️ Chart.js导出的数据无效: ${chineseTitle}`);
-            imageDataUrl = null;
-          }
-        } catch (chartError) {
-          addLog(`⚠️ Chart.js导出失败（重试${retryCount}），错误: ${chartError}`);
-        }
-      }
-      
-      // 如果Chart.js方法失败，尝试Canvas方法
-      if ((!imageDataUrl || imageDataUrl === 'data:,') && ctx) {
-        try {
-          imageDataUrl = canvas.toDataURL('image/png', 1.0);
-          
-          if (imageDataUrl && imageDataUrl !== 'data:,' && imageDataUrl.length > 1000) {
-            addLog(`✅ 通过Canvas方法获取图表数据: ${chineseTitle} (重试${retryCount}次)`);
-            break;
-          } else {
-            addLog(`⚠️ Canvas导出的数据无效: ${chineseTitle}`);
-            imageDataUrl = null;
-          }
-        } catch (canvasError) {
-          addLog(`❌ Canvas导出失败（重试${retryCount}），错误: ${canvasError}`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        } catch (renderError) {
+          addLog(`⚠️ 重新渲染失败: ${renderError}`);
         }
       }
     }
     
-    // 最后一次尝试使用html2canvas
-    if ((!imageDataUrl || imageDataUrl === 'data:,') && chart.id !== 'cluster') {
-      addLog(`🎯 最后尝试：使用html2canvas捕获图表区域: ${chineseTitle}`);
+    // 最后的备用方案：html2canvas（仅在Chart.js和Canvas都失败时使用）
+    if (!this.isValidImageData(imageDataUrl) && chart.id !== 'cluster') {
+      addLog(`🎯 使用html2canvas备用方案: ${chineseTitle}`);
       try {
-        // 尝试多种选择器来找到图表区域
-        const selectors = [
-          `#${canvasId}`,
-          `.chart-panel[data-chart="${chart.id}"] .chart`,
-          `.chart-panel:not([style*="display: none"]) .chart`,
-          `.chart-display .chart-panel .chart`
-        ];
-        
-        let chartElement = null;
-        for (const selector of selectors) {
-          chartElement = document.querySelector(selector) as HTMLElement;
-          if (chartElement) {
-            addLog(`✅ 找到图表元素: ${selector}`);
-            break;
-          }
-        }
-        
-        if (chartElement) {
-          const chartCanvas = await html2canvas(chartElement, {
-            scale: 2,
+        const chartContainer = document.querySelector(`#${canvasId}`)?.parentElement;
+        if (chartContainer) {
+          const html2canvasResult = await html2canvas(chartContainer, {
+            scale: 1.5,
             backgroundColor: '#ffffff',
             useCORS: true,
             allowTaint: true,
-            logging: false,
-            width: chartElement.offsetWidth,
-            height: chartElement.offsetHeight
+            logging: false
           });
           
-          imageDataUrl = chartCanvas.toDataURL('image/png', 1.0);
+          imageDataUrl = html2canvasResult.toDataURL('image/png', 0.9);
           
-          if (imageDataUrl && imageDataUrl !== 'data:,' && imageDataUrl.length > 1000) {
-            addLog(`✅ html2canvas成功捕获图表: ${chineseTitle}`);
-          } else {
-            addLog(`⚠️ html2canvas捕获的数据无效: ${chineseTitle}`);
-            imageDataUrl = null;
+          if (this.isValidImageData(imageDataUrl)) {
+            addLog(`🎉 html2canvas备用方案成功: ${chineseTitle}`);
           }
-        } else {
-          addLog(`❌ 未找到可捕获的图表元素: ${chineseTitle}`);
         }
-      } catch (html2canvasError) {
-        addLog(`❌ html2canvas也失败了: ${chineseTitle}, 错误: ${html2canvasError}`);
+      } catch (error) {
+        addLog(`❌ html2canvas备用方案也失败: ${error}`);
       }
     }
     
-    if (imageDataUrl && imageDataUrl !== 'data:,') {
-      addLog(`🎉 成功获取图表数据: ${chineseTitle}`);
+    if (this.isValidImageData(imageDataUrl)) {
+      addLog(`✅ 图表处理完成: ${chineseTitle}`);
+      return imageDataUrl;
     } else {
-      addLog(`💥 所有方法都失败了: ${chineseTitle}`);
+      addLog(`💥 图表处理失败: ${chineseTitle}`);
+      return null;
     }
-    
-    return imageDataUrl;
+  }
+  
+  // 验证图像数据是否有效
+  private static isValidImageData(imageDataUrl: string | null): boolean {
+    return imageDataUrl != null && 
+           imageDataUrl !== 'data:,' && 
+           imageDataUrl.length > 1000 &&
+           imageDataUrl.startsWith('data:image/');
   }
 
   // 添加图表分析章节到PDF
@@ -689,7 +573,7 @@ export class ExportService {
     // 尝试获取文字分析作为替代
     let fallbackAnalysis = '';
     try {
-      addLog(`📝 图表 "${chineseTitle}" 截图失败，尝试生成文字分析作为替代...`);
+      addLog(`📝 图表截图失败，生成文字分析: ${chineseTitle}`);
       fallbackAnalysis = await AIService.getAcademicAnalysis(
         chart.id,
         evaluationResult,
@@ -703,11 +587,11 @@ export class ExportService {
         isChartAnalysisMode,
         selectedChartIds // 传递选中图表ID列表
       );
-      addLog(`✅ 文字分析已生成作为 "${chineseTitle}" 的替代内容`);
+      addLog(`✅ 文字分析已生成: ${chineseTitle}`);
     } catch (error) {
       console.warn(`文字分析也失败 for ${chineseTitle}:`, error);
       fallbackAnalysis = AIService.getDefaultAcademicAnalysis(chart.id);
-      addLog(`⚠️ 使用默认分析内容替代: ${chineseTitle}`);
+      addLog(`⚠️ 使用默认内容: ${chineseTitle}`);
     }
     
     chartSection.innerHTML = `

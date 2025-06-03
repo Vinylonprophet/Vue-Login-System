@@ -463,13 +463,9 @@
 import { ref, reactive, onMounted, nextTick, computed } from 'vue';
 import { ipApi, pythonMLApi, type IP, type EvaluationResult, type IndicatorStructure } from '../utils/api';
 import { toast } from '../utils/toast';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import * as XLSX from 'xlsx';
 
 // 导入Services
 import { ChartService } from '../services/DataAnalysis/chartService';
-import { AIService } from '../services/DataAnalysis/aiService';
 import { ExportService } from '../services/DataAnalysis/exportService';
 import { DataService } from '../services/DataAnalysis/dataService';
 
@@ -682,42 +678,6 @@ const loadIndicatorStructure = async () => {
   }
 };
 
-const loadGroups = async () => {
-  try {
-    const response = await ipApi.getGroups();
-    // groups变量暂时保留，可能在未来版本中使用
-  } catch (error) {
-    console.error('加载组别失败:', error);
-  }
-};
-
-const loadIPs = async () => {
-  try {
-    const response = await ipApi.getAllIPs();
-    if (response.data) {
-      ips.value = response.data;
-      
-      // 更新可用组别
-      const groupSet = new Set(ips.value.map(ip => ip.group_name));
-      availableGroups.value = Array.from(groupSet);
-      
-      // 初始化筛选
-      updateFilteredIPs();
-    }
-  } catch (error) {
-    console.error('加载IP失败:', error);
-  }
-};
-
-const loadStatistics = async () => {
-  try {
-    const response = await ipApi.getStatistics();
-    Object.assign(statistics, response.data);
-  } catch (error) {
-    console.error('加载统计信息失败:', error);
-  }
-};
-
 const performComprehensiveAnalysis = async () => {
   try {
     const result = await DataService.performComprehensiveAnalysis(
@@ -762,15 +722,6 @@ const performComprehensiveAnalysis = async () => {
 const addLog = (message: string) => {
   const timestamp = new Date().toLocaleTimeString();
   logs.value.push(`[${timestamp}] ${message}`);
-};
-
-// 图表渲染函数
-const renderCharts = () => {
-  nextTick(() => {
-    renderFitnessChart();
-    renderScoreChart();
-    renderRadarChart();
-  });
 };
 
 const renderFitnessChart = () => {
@@ -1227,26 +1178,6 @@ const renderPCAChart = () => {
   });
 };
 
-const generateAdvancedClusteringVisualizationFromData = async (data: any): Promise<string | null> => {
-  try {
-    const response = await pythonMLApi.generateAdvancedPlot('clustering_with_hull', {
-      clustering_results: data.clustering_results,
-      convex_hulls: data.convex_hulls
-    });
-    
-    if (response.success) {
-      return response.image;
-    } else {
-      addLog(`生成聚类图表失败: ${response.error}`);
-      return null;
-    }
-  } catch (error) {
-    console.error('生成高级聚类图表错误:', error);
-    addLog('生成聚类图表失败');
-    return null;
-  }
-};
-
 // 筛选和IP选择相关方法
 const toggleFilterPanel = () => {
   showFilterPanel.value = !showFilterPanel.value;
@@ -1319,7 +1250,6 @@ const performPDFExport = async (selectedChartIds: string[]) => {
       shapResult.value,
       pcaResult.value,
       advancedClusterResult.value,
-      advancedClusterImage.value,
       activeChart,
       isChartAnalysisMode.value,
       addLog,
@@ -1364,12 +1294,6 @@ const aiAnalysisLoading = ref(false);
 const aiAnalysisResult = ref<any>(null);
 const isChartAnalysisMode = ref(false); // 新增：图表分析模式开关
 
-
-const closeAIDialog = () => {
-  showAIDialog.value = false;
-};
-
-
 const setNormalMode = () => {
   if (isChartAnalysisMode.value) {
     isChartAnalysisMode.value = false;
@@ -1382,67 +1306,6 @@ const setChartMode = () => {
     isChartAnalysisMode.value = true;
     addChatMessage('ai', '🔍 已切换到图表分析模式！在此模式下，我将专注于为您分析各种图表数据。请使用下方的快捷按钮或直接询问图表相关问题。');
   }
-};
-
-const startAIAnalysis = async () => {
-  aiAnalysisLoading.value = true;
-  addLog('🤖 开始AI分析...');
-  
-  try {
-    // 准备分析数据
-    const analysisData = {
-      selectedIPCount: selectedIPs.value.length,
-      indicatorCount: filteredThirdIndicators.value.length,
-      evaluationResult: evaluationResult.value,
-      weights: evaluationResult.value?.weights,
-      neuralNetworkResult: neuralNetworkResult.value,
-      shapResult: shapResult.value,
-      pcaResult: pcaResult.value,
-      advancedClusterResult: advancedClusterResult.value
-    };
-    
-    // 获取当前可用的图表类型
-    const availableCharts = chartTabs.value
-      .filter(tab => !tab.disabled)
-      .map(tab => tab.title);
-    
-    const response = await ipApi.aiAnalysis(analysisData, availableCharts, isChartAnalysisMode.value);
-    
-    if (response.success) {
-      aiAnalysisResult.value = response.data;
-      addLog('🎉 AI分析完成');
-    } else {
-      throw new Error(response.message || 'AI分析失败');
-    }
-  } catch (error) {
-    console.error('AI分析失败:', error);
-    addLog(`❌ AI分析失败: ${error}`);
-    toast.fail('AI分析失败，请重试');
-  } finally {
-    aiAnalysisLoading.value = false;
-  }
-};
-
-const formatAIAnalysis = (analysis: string) => {
-  if (!analysis) return '';
-  
-  // 将AI分析结果格式化为HTML
-  return analysis
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // 粗体
-    .replace(/### (.*?)(\n|$)/g, '<h4>$1</h4>') // 三级标题
-    .replace(/## (.*?)(\n|$)/g, '<h3>$1</h3>') // 二级标题
-    .replace(/# (.*?)(\n|$)/g, '<h2>$1</h2>') // 一级标题
-    .replace(/\n\n/g, '</p><p>') // 段落
-    .replace(/^\s*(.*)/g, '<p>$1</p>') // 包装段落
-    .replace(/^\d+\.\s/gm, '<li>') // 有序列表
-    .replace(/<li>/g, '</p><li><p>')
-    .replace(/<\/p><p><\/p>/g, '</p>')
-    .replace(/^<p><\/p>/, '');
-};
-
-const formatAnalysisTime = (timestamp: string) => {
-  if (!timestamp) return '';
-  return new Date(timestamp).toLocaleString('zh-CN');
 };
 
 // AI分析聊天窗口相关
@@ -1714,263 +1577,6 @@ onMounted(() => {
     document.removeEventListener('keydown', handleGlobalKeydown);
   };
 });
-
-// 获取图表AI分析的辅助函数
-const getChartAIAnalysis = async (chartId: string): Promise<string> => {
-  try {
-    let analysisPrompt = '';
-    
-    switch (chartId) {
-      case 'fitness':
-        analysisPrompt = '请详细分析适应度变化图表，重点说明遗传算法的优化过程、收敛趋势和训练效果，控制在100-150字内。';
-        break;
-      case 'scores':
-        analysisPrompt = '请详细分析IP评分分布图表，识别表现优秀和需要改进的项目，并提供针对性建议，控制在100-150字内。';
-        break;
-      case 'radar':
-        analysisPrompt = '请详细分析指标权重雷达图，解释各指标的相对重要性和关键影响因素，控制在100-150字内。';
-        break;
-      case 'neural':
-        analysisPrompt = '请详细分析神经网络训练图表，评估模型的学习能力、收敛速度和性能表现，控制在100-150字内。';
-        break;
-      case 'importance':
-        analysisPrompt = '请详细分析特征重要性图表，识别对预测结果最有影响力的特征及其业务意义，控制在100-150字内。';
-        break;
-      case 'shap':
-        analysisPrompt = '请详细分析SHAP图表，解释模型的可解释性分析结果和各特征的贡献度，控制在100-150字内。';
-        break;
-      case 'pca':
-        analysisPrompt = '请详细分析PCA降维图表，解释主成分和数据分布，控制在100-150字内。';
-        break;
-      case 'cluster':
-        analysisPrompt = '请详细分析聚类图表，解释分组模式和聚类特征，控制在100-150字内。';
-        break;
-      default:
-        return '该图表暂无可用分析。';
-    }
-    
-    // 准备分析数据
-    const analysisData = {
-      selectedIPCount: selectedIPs.value.length,
-      indicatorCount: filteredThirdIndicators.value.length,
-      evaluationResult: evaluationResult.value,
-      weights: evaluationResult.value?.weights,
-      neuralNetworkResult: neuralNetworkResult.value,
-      shapResult: shapResult.value,
-      pcaResult: pcaResult.value,
-      advancedClusterResult: advancedClusterResult.value,
-      customPrompt: analysisPrompt
-    };
-    
-    // 获取当前可用的图表类型
-    const availableCharts = chartTabs.value
-      .filter(tab => !tab.disabled)
-      .map(tab => tab.title);
-    
-    const response = await ipApi.aiAnalysis(analysisData, availableCharts, isChartAnalysisMode.value);
-    
-    if (response.success && response.data?.analysis) {
-      // 清理AI分析结果，移除HTML标签，保持简洁
-      return response.data.analysis
-        .replace(/<[^>]*>/g, '') // 移除HTML标签
-        .replace(/\*\*/g, '') // 移除粗体标记
-        .replace(/###?\s*/g, '') // 移除标题标记
-        .trim();
-    } else {
-      return '该图表的AI分析生成失败，请稍后重试。';
-    }
-  } catch (error) {
-    console.error(`AI分析失败 for chart ${chartId}:`, error);
-    return '由于技术问题，该图表的AI分析暂时不可用。';
-  }
-};
-
-// 获取中文图表标题
-const getChineseChartTitle = (chartId: string): string => {
-  const titleMap: Record<string, string> = {
-    'fitness': '遗传算法适应度变化曲线',
-    'scores': 'IP评分分布图',
-    'radar': '关键指标权重雷达图',
-    'neural': '神经网络训练损失曲线',
-    'importance': '特征重要性分析图',
-    'shap': 'SHAP特征贡献度分析图',
-    'pca': 'PCA主成分降维图',
-    'cluster': '高级聚类分析图'
-  };
-  
-  return titleMap[chartId] || '未知图表';
-};
-
-// Excel导出功能
-const getAcademicAnalysis = async (chartId: string): Promise<string> => {
-  try {
-    return await AIService.getAcademicAnalysis(
-      chartId,
-      evaluationResult.value,
-      neuralNetworkResult.value,
-      shapResult.value,
-      pcaResult.value,
-      advancedClusterResult.value,
-      selectedIPs.value.length,
-      filteredThirdIndicators.value.length,
-      chartTabs.value.filter(tab => !tab.disabled),
-      isChartAnalysisMode.value,
-      chartTabs.value.filter(tab => !tab.disabled).map(tab => tab.id) // 传递选中图表ID列表
-    );
-  } catch (error) {
-    console.error(`学术分析失败 for chart ${chartId}:`, error);
-    return AIService.getDefaultAcademicAnalysis(chartId);
-  }
-};
-
-// 获取默认学术化分析
-const getDefaultAcademicAnalysis = (chartId: string): string => {
-  const defaultAnalyses: Record<string, string> = {
-    'fitness': '遗传算法的适应度函数在迭代过程中呈现良好的收敛特性，表明权重优化策略具有较强的搜索能力和稳定性。算法的收敛速度和最终适应度值反映了评价体系设计的合理性，为后续分析提供了可靠的权重配置基础。',
-    'scores': '评分分布结果显示了样本间的差异化特征，体现了评价体系的区分度和敏感性。不同项目在综合得分上的分布规律为识别优势项目和发展短板提供了量化依据，有助于制定针对性的改进策略。',
-    'radar': '权重雷达图揭示了各维度指标在评价体系中的相对重要性，体现了专家知识与数据驱动相结合的权重配置方法。主要维度的权重分布符合理论预期，为评价结果的可信度提供了支撑。',
-    'neural': '神经网络模型在训练过程中展现出良好的学习能力，损失函数的下降趋势表明模型能够有效捕捉输入特征与目标变量间的非线性关系。模型的收敛性能为复杂评价问题的建模提供了有效工具。',
-    'importance': '特征重要性分析结果识别了对模型预测具有关键影响的因子，为理解评价机制提供了深层次洞察。重要性排序为特征选择和模型优化提供了科学依据，有助于提升预测准确性。',
-    'shap': 'SHAP值分析增强了模型的可解释性，通过量化各特征对预测结果的边际贡献，揭示了决策过程的透明度。这种解释性分析对于建立可信的评价模型具有重要意义。',
-    'pca': '主成分分析有效实现了高维数据的降维处理，前两个主成分包含了原始数据的主要信息。降维结果在保持数据结构完整性的同时，为后续分析提供了更加简洁的特征空间。',
-    'cluster': '聚类分析识别了样本的内在分组结构，不同簇的形成反映了项目在多维特征空间中的相似性模式。聚类结果为制定分类管理策略和识别典型发展模式提供了参考。'
-  };
-  
-  return defaultAnalyses[chartId] || '该维度的实证分析结果为研究提供了重要的数据支撑和理论验证。';
-};
-
-// 获取学术化章节标题
-const getAcademicSectionTitle = (chartId: string): string => {
-  const sectionTitles: Record<string, string> = {
-    'fitness': '4.1 权重优化算法收敛性分析',
-    'scores': '4.2 综合评价结果分布特征',
-    'radar': '4.3 指标权重配置合理性验证',
-    'neural': '4.4 神经网络模型学习性能',
-    'importance': '4.5 关键影响因子识别分析',
-    'shap': '4.6 模型可解释性分析结果',
-    'pca': '4.7 多维数据降维效果评估',
-    'cluster': '4.8 样本聚类结构特征分析'
-  };
-  
-  return sectionTitles[chartId] || '4.X 相关分析结果';
-};
-
-// 获取AI生成内容的通用函数
-const getAIGeneratedContent = async (contentType: string, ipCount: number, indicatorCount: number): Promise<string> => {
-  try {
-    let prompt = '';
-    
-    switch (contentType) {
-      case 'abstract':
-        prompt = `请为《基于多维评价体系的少数民族体育IP品牌塑造路径研究》撰写学术论文摘要。研究样本${ipCount}个IP项目，使用${indicatorCount}项指标。要求包含：研究背景、方法、主要发现、创新点、实践意义。字数400-500字，体现学术严谨性，包含关键词。`;
-        break;
-      case 'background':
-        prompt = `请撰写少数民族体育IP品牌塑造研究的背景与意义章节。包含：1.1研究背景(当前发展现状、存在问题)，1.2研究意义(理论价值、实践意义)，1.3研究目标(3个具体目标)。要求学术化表达，逻辑清晰，字数800-1000字。`;
-        break;
-      case 'method':
-        prompt = `请撰写研究方法与数据来源章节。包含：2.1研究方法(遗传算法、神经网络、SHAP分析等)，2.2数据来源与样本(${ipCount}个IP项目，${indicatorCount}项指标)，2.3技术路线。要求专业术语准确，方法论述清晰，字数700-900字。`;
-        break;
-      case 'analysis_intro':
-        prompt = `请撰写"3.评价体系构建与算法优化"和"4.实证分析结果"两个章节的引言部分。说明评价体系的构建逻辑、算法选择依据，以及实证分析的整体思路。要求学术严谨，逻辑清晰，字数500-600字。`;
-        break;
-      case 'branding_path':
-        prompt = `请撰写"品牌塑造路径设计"章节。基于前面的实证分析结果，提出少数民族体育IP的品牌塑造路径。包含：5.1三位一体塑造模式，5.2差异化发展策略，5.3协同发展机制。要求实用性强，可操作性强，字数1000-1200字。`;
-        break;
-      case 'policy_suggestions':
-        prompt = `请撰写"政策建议与实践指导"章节。包含：6.1政策支持建议(具体政策措施)，6.2运营实践指导(操作性建议)，6.3发展路径优化(实施方案)。要求针对性强，可行性高，字数800-1000字。`;
-        break;
-      case 'conclusion':
-        prompt = `请撰写"结论与展望"章节。包含：7.1主要结论(研究发现总结)，7.2研究贡献(理论贡献、实践贡献、方法贡献)，7.3研究展望(未来研究方向)。要求高度概括，前瞻性强，字数600-800字。`;
-        break;
-      default:
-        return '<p>内容生成中...</p>';
-    }
-    
-    // 使用统一的AI分析函数
-    const aiResponse = await performUnifiedAIAnalysis(prompt, true);
-    
-    // 学术化处理
-    return aiResponse
-      .replace(/<[^>]*>/g, '') // 移除HTML标签
-      .replace(/\*\*/g, '') // 移除粗体标记
-      .replace(/###?\s*/g, '') // 移除标题标记
-      .replace(/AI分析|人工智能|智能分析|机器学习模型/g, '计算模型')
-      .replace(/通过分析|可以看出|显示了/g, '分析结果表明')
-      .replace(/建议|推荐/g, '研究发现')
-      .split('\n')
-      .map(paragraph => paragraph.trim() ? `<p style="text-align: justify; line-height: 1.8; margin-bottom: 15px;">${paragraph.trim()}</p>` : '')
-      .join('')
-      .replace(/^<p[^>]*>(\d+\.\d*\s*[^<]+)<\/p>/gm, '<h3 style="font-size: 16px; color: #2c3e50; margin: 20px 0 10px 0;">$1</h3>')
-      .replace(/^<p[^>]*>([^<]*章节?[^<]*)<\/p>/gm, '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">$1</h2>');
-  } catch (error) {
-    console.error(`AI内容生成失败 for ${contentType}:`, error);
-    return getDefaultContent(contentType);
-  }
-};
-
-// 默认内容模板
-const getDefaultContent = (contentType: string): string => {
-  const defaults: Record<string, string> = {
-    'abstract': '<p style="text-align: justify; line-height: 1.8; margin-bottom: 15px;">本研究构建了少数民族体育IP的多维评价体系...</p>',
-    'background': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">1. 研究背景与意义</h2><p style="text-align: justify; line-height: 1.8;">研究背景生成中...</p>',
-    'method': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">2. 研究方法与数据来源</h2><p style="text-align: justify; line-height: 1.8;">研究方法生成中...</p>',
-    'analysis_intro': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">3. 评价体系构建与算法优化</h2><p style="text-align: justify; line-height: 1.8;">实证分析引言生成中...</p>',
-    'branding_path': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">5. 品牌塑造路径设计</h2><p style="text-align: justify; line-height: 1.8;">品牌塑造路径内容生成中...</p>',
-    'policy_suggestions': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">6. 政策建议与实践指导</h2><p style="text-align: justify; line-height: 1.8;">政策建议内容生成中...</p>',
-    'conclusion': '<h2 style="font-size: 20px; color: #2c3e50; margin-bottom: 20px;">7. 结论与展望</h2><p style="text-align: justify; line-height: 1.8;">结论内容生成中...</p>'
-  };
-  
-  return defaults[contentType] || '<p>内容生成中...</p>';
-};
-
-// 获取Canvas ID的辅助函数
-const getCanvasId = (chartId: string): string => {
-  switch (chartId) {
-    case 'fitness':
-      return 'fitnessChart';
-    case 'scores':
-      return 'scoreChart';
-    case 'radar':
-      return 'radarChart';
-    case 'neural':
-      return 'nnLossChart';
-    case 'importance':
-      return 'featureImportanceChart';
-    case 'shap':
-      return 'shapChart';
-    case 'pca':
-      return 'pcaChart';
-    default:
-      return `${chartId}Chart`;
-  }
-};
-
-// 渲染特定图表的辅助函数
-const renderSpecificChart = (chartId: string) => {
-  switch (chartId) {
-    case 'fitness':
-      renderFitnessChart();
-      break;
-    case 'scores':
-      renderScoreChart();
-      break;
-    case 'radar':
-      renderRadarChart();
-      break;
-    case 'neural':
-      renderNeuralNetworkCharts();
-      break;
-    case 'importance':
-      renderNeuralNetworkCharts();
-      break;
-    case 'shap':
-      renderSHAPChart();
-      break;
-    case 'pca':
-      renderPCAChart();
-      break;
-  }
-};
 
 const startNewChat = () => {
   // 清空聊天历史
