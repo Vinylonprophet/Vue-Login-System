@@ -365,7 +365,6 @@ const showFilterPanel = ref(false);
 // IP数据和选择
 const ips = ref<IP[]>([]);
 const selectedIPs = ref<string[]>([]);
-const groups = ref<string[]>(['全部']);
 
 // IP筛选
 const ipGroupFilter = ref('全部');
@@ -459,13 +458,6 @@ const hasAnalysisResults = computed(() => {
          advancedClusterImage.value !== '';
 });
 
-// 计算属性：动态placeholder
-const inputPlaceholder = computed(() => {
-  return isChartAnalysisMode.value 
-    ? '输入图表分析问题或使用Ctrl+数字键快速分析...'
-    : '输入任何问题，我来为您解答...';
-});
-
 // 生命周期
 onMounted(async () => {
   await loadInitialData();
@@ -492,18 +484,6 @@ const loadInitialData = async () => {
     addLog(`加载初始数据失败: ${error}`);
   } finally {
     loading.value = false;
-  }
-};
-
-const loadIndicatorStructure = async () => {
-  try {
-    const response = await ipApi.getIndicators();
-    if (response.data) {
-      indicatorStructure.value = response.data;
-      filteredThirdIndicators.value = response.data.allThird;
-    }
-  } catch (error) {
-    console.error('加载指标结构失败:', error);
   }
 };
 
@@ -551,143 +531,6 @@ const performComprehensiveAnalysis = async () => {
 const addLog = (message: string) => {
   const timestamp = new Date().toLocaleTimeString();
   logs.value.push(`[${timestamp}] ${message}`);
-};
-
-const renderFitnessChart = () => {
-  const canvas = document.querySelector('#fitnessChart') as HTMLCanvasElement;
-  if (!canvas || !evaluationResult.value) return;
-  
-  Chart.getChart(canvas)?.destroy();
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  
-  const fitnessHistory = evaluationResult.value.fitnessHistory;
-  const iterations = fitnessHistory.length;
-  const avgFitness = fitnessHistory.map(iteration => 
-    iteration.reduce((sum, val) => sum + val, 0) / iteration.length
-  );
-  
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: Array.from({ length: iterations }, (_, i) => `第${i + 1}代`),
-      datasets: [{
-        label: '平均适应度',
-        data: avgFitness,
-        borderColor: 'rgb(75, 192, 192)',
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-        tension: 0.1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: '遗传算法适应度收敛过程'
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: false,
-          title: { display: true, text: '适应度值' }
-        },
-        x: {
-          title: { display: true, text: '迭代次数' }
-        }
-      }
-    }
-  });
-};
-
-const renderScoreChart = () => {
-  const canvas = document.querySelector('#scoreChart') as HTMLCanvasElement;
-  if (!canvas || !evaluationResult.value) return;
-  
-  Chart.getChart(canvas)?.destroy();
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  
-  const evaluation = evaluationResult.value.evaluation;
-  const labels = evaluation.map(item => item.name);
-  const scores = evaluation.map(item => item.score);
-  
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'IP评分',
-        data: scores,
-        backgroundColor: 'rgba(54, 162, 235, 0.8)',
-        borderColor: 'rgba(54, 162, 235, 1)',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: { display: true, text: 'IP综合评分排名' }
-      },
-      scales: {
-        y: { beginAtZero: true, title: { display: true, text: '评分' } },
-        x: { title: { display: true, text: 'IP名称' } }
-      }
-    }
-  });
-};
-
-const renderRadarChart = () => {
-  const canvas = document.querySelector('#radarChart') as HTMLCanvasElement;
-  if (!canvas || !evaluationResult.value) return;
-  
-  Chart.getChart(canvas)?.destroy();
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  
-  const weights = evaluationResult.value.weights;
-  const indicators = filteredThirdIndicators.value;
-  
-  const indexedWeights = weights.map((weight, index) => ({ weight, index }));
-  indexedWeights.sort((a, b) => b.weight - a.weight);
-  const topIndicators = indexedWeights.slice(0, 8);
-  
-  const radarLabels = topIndicators.map(item => indicators[item.index] || `指标${item.index + 1}`);
-  const radarWeights = topIndicators.map(item => item.weight * 100);
-  
-  new Chart(ctx, {
-    type: 'radar',
-    data: {
-      labels: radarLabels,
-      datasets: [{
-        label: '指标权重(%)',
-        data: radarWeights,
-        fill: true,
-        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-        borderColor: 'rgb(255, 99, 132)',
-        pointBackgroundColor: 'rgb(255, 99, 132)',
-        pointBorderColor: '#fff',
-        pointHoverBackgroundColor: '#fff',
-        pointHoverBorderColor: 'rgb(255, 99, 132)'
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: { display: true, text: '关键指标权重分布' }
-      },
-      scales: {
-        r: {
-          angleLines: { display: false },
-          suggestedMin: 0,
-          suggestedMax: Math.max(...radarWeights) * 1.2
-        }
-      }
-    }
-  });
 };
 
 // 筛选和IP选择相关方法
@@ -1097,16 +940,6 @@ const availableCharts = computed(() => [
 ]);
 
 const availableEnabledCharts = computed(() => availableCharts.value.filter(chart => !chart.disabled));
-
-const selectAllCharts = () => {
-  if (selectedChartsForExport.value.length === availableEnabledCharts.value.length) {
-    // 如果已经全选，则取消全选
-    selectedChartsForExport.value = [];
-    } else {
-    // 否则全选所有可用图表
-    selectedChartsForExport.value = availableEnabledCharts.value.map(chart => chart.id);
-  }
-};
 
 const closeChartSelectionDialog = () => {
   showChartSelectionDialog.value = false;
