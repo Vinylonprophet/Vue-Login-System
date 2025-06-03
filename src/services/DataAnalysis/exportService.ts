@@ -376,35 +376,56 @@ export class ExportService {
     activeChart.value = chart.id;
     await nextTick();
     
-    // 优化等待时间策略 - 根据图表复杂度设置合理的等待时间
+    // 增加等待时间 - 确保图表完全渲染
     const waitTimeMap: Record<string, number> = {
-      'shap': 8000,        // SHAP图表稍微复杂
-      'neural': 5000,      // 神经网络图表
-      'importance': 5000,  // 特征重要性
-      'pca': 4000,         // PCA图表
-      'cluster': 4000,     // 聚类图表
-      'fitness': 3000,     // 适应度曲线
-      'scores': 3000,      // 评分分布
-      'radar': 3000        // 雷达图
+      'shap': 12000,       // SHAP图表最复杂，需要更多时间
+      'radar': 10000,      // 雷达图有线条和多个点，需要更多时间
+      'importance': 9000,  // 特征重要性图表，柱状图+标签
+      'neural': 8000,      // 神经网络图表
+      'pca': 6000,         // PCA图表
+      'cluster': 6000,     // 聚类图表
+      'fitness': 5000,     // 适应度曲线
+      'scores': 5000,      // 评分分布
     };
     
-    const waitTime = waitTimeMap[chart.id] || 3000;
+    const waitTime = waitTimeMap[chart.id] || 5000;
     addLog(`⏳ 等待图表渲染完成 (${waitTime/1000}秒): ${chineseTitle}`);
     await new Promise(resolve => setTimeout(resolve, waitTime));
+    
+    // 额外的动态检查：确保图表真正渲染完成
+    await this.waitForChartToRender(chart.id, addLog);
     
     const canvasId = ChartService.getCanvasId(chart.id);
     let imageDataUrl: string | null = null;
     
-    // 简化的重试机制 - 最多2次重试
-    const maxRetries = 2;
+    // 增加重试次数到3次
+    const maxRetries = 3;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       addLog(`🎯 第${attempt}次尝试获取图表: ${chineseTitle}`);
       
-      // 如果是重试，稍微等待一下
+      // 如果是重试，稍微等待一下并重新渲染
       if (attempt > 1) {
-        addLog(`⏳ 重试前等待2秒...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        addLog(`⏳ 重试前等待并重新渲染...`);
+        
+        // 重新渲染图表
+        try {
+          ChartService.renderSpecificChart(
+            chart.id, 
+            evaluationResult, 
+            neuralNetworkResult, 
+            shapResult, 
+            pcaResult, 
+            filteredThirdIndicators, 
+            filteredThirdIndicators
+          );
+          
+          // 等待重新渲染完成
+          await new Promise(resolve => setTimeout(resolve, waitTime * 0.5));
+          await this.waitForChartToRender(chart.id, addLog);
+        } catch (renderError) {
+          addLog(`⚠️ 重新渲染失败: ${renderError}`);
+        }
       }
       
       const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
@@ -448,25 +469,6 @@ export class ExportService {
       } catch (error) {
         addLog(`⚠️ Canvas方法失败: ${error}`);
       }
-      
-      // 如果两种方法都失败，且还有重试机会，强制重新渲染
-      if (attempt < maxRetries) {
-        addLog(`🔄 强制重新渲染图表: ${chineseTitle}`);
-        try {
-          ChartService.renderSpecificChart(
-            chart.id, 
-            evaluationResult, 
-            neuralNetworkResult, 
-            shapResult, 
-            pcaResult, 
-            filteredThirdIndicators, 
-            filteredThirdIndicators
-          );
-          await new Promise(resolve => setTimeout(resolve, 3000));
-        } catch (renderError) {
-          addLog(`⚠️ 重新渲染失败: ${renderError}`);
-        }
-      }
     }
     
     // 最后的备用方案：html2canvas（仅在Chart.js和Canvas都失败时使用）
@@ -503,6 +505,108 @@ export class ExportService {
     }
   }
   
+  // 新增：动态等待图表渲染完成
+  private static async waitForChartToRender(chartId: string, addLog: (message: string) => void): Promise<void> {
+    const canvasId = ChartService.getCanvasId(chartId);
+    const maxWaitTime = 10000; // 最大等待10秒
+    const checkInterval = 500;  // 每500ms检查一次
+    let waitedTime = 0;
+    
+    while (waitedTime < maxWaitTime) {
+      const canvas = document.querySelector(`#${canvasId}`) as HTMLCanvasElement;
+      
+      if (canvas && canvas.width > 50 && canvas.height > 50) {
+        // 检查是否有Chart.js实例
+        const chartInstance = Chart.getChart(canvas);
+        if (chartInstance) {
+          // 检查图表是否有数据
+          const hasData = chartInstance.data && 
+                          chartInstance.data.datasets && 
+                          chartInstance.data.datasets.length > 0;
+          
+          if (hasData) {
+            // 对雷达图进行额外检查：确保所有线条都已绘制
+            if (chartId === 'radar') {
+              try {
+                const context = canvas.getContext('2d');
+                if (context) {
+                  // 检查Canvas中是否有足够的绘制内容（线条和点）
+                  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                  const nonWhitePixels = imageData.data.filter((pixel, index) => 
+                    index % 4 !== 3 && pixel < 250 // 非透明度通道且非白色
+                  ).length;
+                  
+                  // 雷达图应该有相当数量的非白色像素（线条、点、标签）
+                  if (nonWhitePixels > 1000) {
+                    addLog(`✅ 雷达图渲染检查通过: ${chartId} (耗时${waitedTime}ms, 像素数${nonWhitePixels})`);
+                    return;
+                  } else {
+                    addLog(`⏳ 雷达图仍在渲染中: ${chartId} (像素数${nonWhitePixels})`);
+                  }
+                }
+              } catch (error) {
+                // 像素检查失败，继续等待
+              }
+            } 
+            // 对特征重要性图表进行额外检查
+            else if (chartId === 'importance') {
+              try {
+                const context = canvas.getContext('2d');
+                if (context) {
+                  // 检查Canvas中是否有柱状图内容
+                  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                  const coloredPixels = imageData.data.filter((pixel, index) => 
+                    index % 4 !== 3 && pixel < 240 // 非透明度通道且有颜色
+                  ).length;
+                  
+                  // 特征重要性图应该有足够的彩色像素（柱状图）
+                  if (coloredPixels > 800) {
+                    addLog(`✅ 特征重要性图渲染检查通过: ${chartId} (耗时${waitedTime}ms, 彩色像素数${coloredPixels})`);
+                    return;
+                  } else {
+                    addLog(`⏳ 特征重要性图仍在渲染中: ${chartId} (彩色像素数${coloredPixels})`);
+                  }
+                }
+              } catch (error) {
+                // 像素检查失败，继续等待
+              }
+            }
+            // 其他图表的标准检查
+            else {
+              addLog(`✅ 图表渲染检查通过: ${chartId} (耗时${waitedTime}ms)`);
+              return;
+            }
+          }
+        }
+        
+        // 对于非Chart.js图表（如聚类图），检查Canvas内容
+        if (chartId === 'cluster') {
+          try {
+            const context = canvas.getContext('2d');
+            if (context) {
+              const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+              const hasContent = imageData.data.some((pixel, index) => 
+                index % 4 !== 3 && pixel !== 0 // 非透明度通道且非黑色
+              );
+              
+              if (hasContent) {
+                addLog(`✅ 聚类图渲染检查通过: ${chartId} (耗时${waitedTime}ms)`);
+                return;
+              }
+            }
+          } catch (error) {
+            // 忽略检查错误，继续等待
+          }
+        }
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, checkInterval));
+      waitedTime += checkInterval;
+    }
+    
+    addLog(`⚠️ 图表渲染检查超时: ${chartId} (等待${maxWaitTime}ms)`);
+  }
+
   // 验证图像数据是否有效
   private static isValidImageData(imageDataUrl: string | null): boolean {
     return imageDataUrl != null && 
@@ -911,4 +1015,4 @@ export class ExportService {
       setLoadingText('');
     }
   }
-} 
+}
