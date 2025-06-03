@@ -202,9 +202,12 @@ def shap_explain():
         X = np.array(X, dtype=np.float32)
         input_size = X.shape[1]
         
-        # 使用传入的指标名称，如果没有则使用默认格式
+        # 确保使用传入的指标名称，如果没有传入或数量不匹配则使用默认格式
         if not feature_names or len(feature_names) != input_size:
+            print(f"警告：传入的指标名称数量({len(feature_names) if feature_names else 0})与特征数量({input_size})不匹配")
             feature_names = [f'指标{i+1}' for i in range(input_size)]
+        else:
+            print(f"使用传入的指标名称：{feature_names[:3]}...（共{len(feature_names)}个）")
         
         # 创建伪目标变量（综合评分）
         Y = np.mean(X, axis=1)
@@ -239,11 +242,13 @@ def shap_explain():
                 'predicted_value': float(model(X_tensor[i:i+1]).item())
             })
         
+        print(f"SHAP分析完成，返回指标名称：{feature_names[:3]}...（共{len(feature_names)}个）")
+        
         return jsonify({
             'success': True,
             'mean_shap_values': mean_shap_values.tolist(),
             'ip_explanations': ip_explanations,
-            'feature_names': feature_names  # 返回传入的指标名称
+            'feature_names': feature_names  # 返回确认的指标名称
         })
         
     except Exception as e:
@@ -292,6 +297,17 @@ def pca_analysis():
                 'group': ips_data[i].get('group_name', '未知')
             })
         
+        # 创建更友好的轴标签
+        axis_labels = []
+        for i in range(n_components):
+            variance_percent = explained_variance_ratio[i] * 100
+            axis_labels.append(f'主成分{i+1} ({variance_percent:.1f}%方差)')
+        
+        print(f"PCA分析完成：")
+        print(f"- 主成分数量: {n_components}")
+        print(f"- 轴标签: {axis_labels}")
+        print(f"- 累计方差解释率: {cumulative_variance[-1]*100:.1f}%")
+        
         return jsonify({
             'success': True,
             'pca_results': pca_results,
@@ -299,7 +315,10 @@ def pca_analysis():
             'cumulative_variance': cumulative_variance.tolist(),
             'components': components.tolist(),
             'n_components': n_components,
-            'total_variance_explained': float(cumulative_variance[-1])
+            'total_variance_explained': float(cumulative_variance[-1]),
+            'axis_labels': axis_labels,  # 新增：友好的轴标签
+            'x_axis_label': axis_labels[0] if len(axis_labels) > 0 else 'PC1',
+            'y_axis_label': axis_labels[1] if len(axis_labels) > 1 else 'PC2'
         })
         
     except Exception as e:
@@ -414,7 +433,10 @@ def advanced_clustering():
             },
             'pca_info': {
                 'used': use_pca,
-                'variance_explained': variance_explained.tolist() if variance_explained is not None else None
+                'variance_explained': variance_explained.tolist() if variance_explained is not None else None,
+                'x_axis_label': f'主成分1 ({variance_explained[0]*100:.1f}%方差)' if use_pca and variance_explained is not None else '维度1',
+                'y_axis_label': f'主成分2 ({variance_explained[1]*100:.1f}%方差)' if use_pca and variance_explained is not None and len(variance_explained) > 1 else '维度2',
+                'total_variance': f'{sum(variance_explained)*100:.1f}%' if variance_explained is not None else None
             }
         })
         
@@ -436,6 +458,7 @@ def generate_advanced_plot():
             # 聚类图与凸包
             clustering_results = plot_data.get('clustering_results', [])
             convex_hulls = plot_data.get('convex_hulls', [])
+            pca_info = plot_data.get('pca_info', {})
             
             # 绘制散点
             colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
@@ -461,9 +484,20 @@ def generate_advanced_plot():
                     ax.fill(hull_points[:, 0], hull_points[:, 1], 
                            color=color, alpha=0.2)
             
-            ax.set_xlabel('主成分1', fontsize=12)
-            ax.set_ylabel('主成分2', fontsize=12)
-            ax.set_title('聚类分析结果（含凸包）', fontsize=14)
+            # 设置友好的轴标签
+            x_label = pca_info.get('x_axis_label', '维度1')
+            y_label = pca_info.get('y_axis_label', '维度2')
+            total_variance = pca_info.get('total_variance', '')
+            
+            ax.set_xlabel(x_label, fontsize=12)
+            ax.set_ylabel(y_label, fontsize=12)
+            
+            # 设置标题，包含方差信息
+            title = '聚类分析结果（含凸包）'
+            if total_variance:
+                title += f' - 总方差解释: {total_variance}'
+            ax.set_title(title, fontsize=14)
+            
             ax.legend()
             ax.grid(True, alpha=0.3)
             
@@ -471,6 +505,7 @@ def generate_advanced_plot():
             # PCA双标图
             pca_results = plot_data.get('pca_results', [])
             components = plot_data.get('components', [])
+            pca_info = plot_data.get('pca_info', {})
             
             # 绘制数据点
             for result in pca_results:
@@ -487,8 +522,12 @@ def generate_advanced_plot():
                     ax.text(pc1*1.1, pc2*1.1, f'指标{i+1}', fontsize=8, 
                            ha='center', va='center')
             
-            ax.set_xlabel('主成分1', fontsize=12)
-            ax.set_ylabel('主成分2', fontsize=12)
+            # 使用友好的轴标签
+            x_label = pca_info.get('x_axis_label', '主成分1')
+            y_label = pca_info.get('y_axis_label', '主成分2')
+            
+            ax.set_xlabel(x_label, fontsize=12)
+            ax.set_ylabel(y_label, fontsize=12)
             ax.set_title('PCA双标图', fontsize=14)
             ax.grid(True, alpha=0.3)
             ax.axhline(y=0, color='k', linestyle='-', alpha=0.3)

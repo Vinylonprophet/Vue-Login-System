@@ -423,6 +423,17 @@ export class ChartService {
           pointHoverRadius: 10
         }));
         
+        // 使用后端返回的友好轴标签，如果没有则构建包含方差信息的标签
+        const xAxisLabel = pcaResult.x_axis_label || 
+          (pcaResult.explained_variance_ratio && pcaResult.explained_variance_ratio.length > 0 
+            ? `主成分1 (${(pcaResult.explained_variance_ratio[0] * 100).toFixed(1)}%方差)` 
+            : '主成分1');
+        
+        const yAxisLabel = pcaResult.y_axis_label || 
+          (pcaResult.explained_variance_ratio && pcaResult.explained_variance_ratio.length > 1 
+            ? `主成分2 (${(pcaResult.explained_variance_ratio[1] * 100).toFixed(1)}%方差)` 
+            : '主成分2');
+        
         new Chart(ctx, {
           type: 'scatter',
           data: {
@@ -445,13 +456,13 @@ export class ChartService {
               x: {
                 title: {
                   display: true,
-                  text: `主成分1 (${(pcaResult.explained_variance_ratio[0] * 100).toFixed(1)}%)`
+                  text: xAxisLabel
                 }
               },
               y: {
                 title: {
                   display: true,
-                  text: `主成分2 (${(pcaResult.explained_variance_ratio[1] * 100).toFixed(1)}%)`
+                  text: yAxisLabel
                 }
               }
             }

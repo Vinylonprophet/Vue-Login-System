@@ -1312,7 +1312,7 @@ router.post('/ai-analysis', async (req, res) => {
 请提醒用户当前处于图表分析模式，如果需要进行数据分析请先选择IP项目并运行分析。
 如果用户的问题与数据分析无关，建议切换到普通对话模式以获得更好的体验。`;
                 } else {
-                    // 有数据的图表分析
+                    // 图表分析模式且有数据
                     prompt = `你是专业的数据分析师，当前处于图表分析模式。用户问题：${analysisData.customPrompt}
 
 基于以下数据回答用户的问题：
@@ -1325,14 +1325,15 @@ router.post('/ai-analysis', async (req, res) => {
                     // 添加具体的分析数据
                     if (analysisData.evaluationResult) {
                         prompt += `\n\n### IP评分排名:`;
-                        analysisData.evaluationResult.evaluation.slice(0, 5).forEach((item, index) => {
-                            prompt += `\n${index + 1}. ${item.name}: ${item.score.toFixed(3)}分`;
+                        // 显示所有评分
+                        analysisData.evaluationResult.evaluation.forEach((item) => {
+                            prompt += `\n${item.rank}. ${item.name}: ${item.score.toFixed(3)}分`;
                         });
                     }
 
                     if (analysisData.weights && analysisData.weights.length > 0) {
                         prompt += `\n\n### 关键指标权重:`;
-                        analysisData.weights.slice(0, 5).forEach((weight, index) => {
+                        analysisData.weights.forEach((weight, index) => {
                             prompt += `\n指标${index + 1}: ${(weight * 100).toFixed(2)}%`;
                         });
                     }
@@ -1372,9 +1373,9 @@ router.post('/ai-analysis', async (req, res) => {
 简要数据概况：`;
 
                     if (analysisData.evaluationResult) {
-                        prompt += `\n前3名IP: `;
-                        analysisData.evaluationResult.evaluation.slice(0, 3).forEach((item, index) => {
-                            prompt += `${index + 1}.${item.name}(${item.score.toFixed(2)}分) `;
+                        prompt += `\n所有IP评分排名: `;
+                        analysisData.evaluationResult.evaluation.forEach((item) => {
+                            prompt += `${item.rank}.${item.name}(${item.score.toFixed(2)}分) `;
                         });
                     }
 
@@ -1410,14 +1411,15 @@ router.post('/ai-analysis', async (req, res) => {
             // 添加具体的分析数据
             if (analysisData.evaluationResult) {
                 prompt += `\n\n### IP评分排名:`;
-                analysisData.evaluationResult.evaluation.slice(0, 5).forEach((item, index) => {
-                    prompt += `\n${index + 1}. ${item.name}: ${item.score.toFixed(3)}分`;
+                // 显示所有评分
+                analysisData.evaluationResult.evaluation.forEach((item) => {
+                    prompt += `\n${item.rank}. ${item.name}: ${item.score.toFixed(3)}分`;
                 });
             }
 
             if (analysisData.weights && analysisData.weights.length > 0) {
-                prompt += `\n\n### 关键指标权重 (前5项):`;
-                analysisData.weights.slice(0, 5).forEach((weight, index) => {
+                prompt += `\n\n### 关键指标权重:`;
+                analysisData.weights.forEach((weight, index) => {
                     prompt += `\n指标${index + 1}: ${(weight * 100).toFixed(2)}%`;
                 });
             }

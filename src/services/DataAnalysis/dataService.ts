@@ -198,7 +198,7 @@ export class DataService {
               ? filteredThirdIndicators 
               : indicatorStructure.allThird;
             
-            const ipsWithArrayIndicators = this.convertIPDataForML(selectedIPData, indicatorStructure);
+            const ipsWithArrayIndicators = this.convertIPDataForML(selectedIPData, indicatorStructure, filteredThirdIndicators);
             
             const nnResponse = await pythonMLApi.trainNeuralNetwork(ipsWithArrayIndicators, currentFeatureNames);
             if (nnResponse.success && nnResponse.data) {
@@ -221,11 +221,24 @@ export class DataService {
               ? filteredThirdIndicators 
               : indicatorStructure.allThird;
             
-            const ipsWithArrayIndicators = this.convertIPDataForML(selectedIPData, indicatorStructure);
+            addLog(`📊 准备SHAP分析：筛选指标数量 ${currentFeatureNames.length}，指标名称：${currentFeatureNames.slice(0, 3).join(', ')}${currentFeatureNames.length > 3 ? '...' : ''}`);
+            
+            const ipsWithArrayIndicators = this.convertIPDataForML(selectedIPData, indicatorStructure, filteredThirdIndicators);
+            
+            // 检查数据维度
+            if (ipsWithArrayIndicators.length > 0) {
+              const firstIPIndicatorCount = ipsWithArrayIndicators[0].indicators.length;
+              addLog(`🔍 IP数据维度检查：${ipsWithArrayIndicators.length}个IP，每个IP ${firstIPIndicatorCount}个指标值`);
+              
+              if (firstIPIndicatorCount !== currentFeatureNames.length) {
+                addLog(`⚠️ 警告：指标名称数量(${currentFeatureNames.length})与数据维度(${firstIPIndicatorCount})不匹配！`);
+              }
+            }
             
             const shapResponse = await pythonMLApi.shapExplain(ipsWithArrayIndicators, currentFeatureNames);
             if (shapResponse.success && shapResponse.data) {
               tempShapResult = shapResponse.data;
+              addLog(`✅ SHAP分析完成，返回特征名称数量：${shapResponse.data.feature_names?.length || 0}`);
             } else {
               addLog(`⚠️ SHAP分析失败: ${shapResponse.error || '未知错误'}`);
             }
@@ -240,7 +253,7 @@ export class DataService {
         if (selectedIPs.length >= 2) {
           setLoadingText('PCA分析中...');
           try {
-            const ipsWithArrayIndicators = this.convertIPDataForML(selectedIPData, indicatorStructure);
+            const ipsWithArrayIndicators = this.convertIPDataForML(selectedIPData, indicatorStructure, filteredThirdIndicators);
             
             const pcaResponse = await pythonMLApi.pcaAnalysis(ipsWithArrayIndicators, 2);
             if (pcaResponse.success) {
@@ -259,7 +272,7 @@ export class DataService {
         if (selectedIPs.length >= 2) {
           setLoadingText('聚类分析中...');
           try {
-            const ipsWithArrayIndicators = this.convertIPDataForML(selectedIPData, indicatorStructure);
+            const ipsWithArrayIndicators = this.convertIPDataForML(selectedIPData, indicatorStructure, filteredThirdIndicators);
             
             const clusterResponse = await pythonMLApi.advancedClustering(ipsWithArrayIndicators, 2, true);
             if (clusterResponse.success && clusterResponse.data) {
@@ -305,7 +318,7 @@ export class DataService {
   }
 
   // 转换IP数据格式为机器学习所需格式
-  private static convertIPDataForML(selectedIPData: IP[], indicatorStructure: IndicatorStructure): MLIPData[] {
+  private static convertIPDataForML(selectedIPData: IP[], indicatorStructure: IndicatorStructure, filteredThirdIndicators?: string[]): MLIPData[] {
     return selectedIPData.map(ip => {
       // 如果indicators已经是数组格式，直接使用（虽然类型上不应该出现）
       if (Array.isArray(ip.indicators)) {
@@ -314,14 +327,30 @@ export class DataService {
       
       // indicators是对象格式，需要转换为数组
       const indicatorArray: number[] = [];
-      if (indicatorStructure.allProperties && indicatorStructure.allProperties.length > 0) {
-        // 按照系统定义的属性顺序生成数组
-        indicatorStructure.allProperties.forEach(property => {
-          indicatorArray.push((ip.indicators as Record<string, number>)[property] || 0);
+      
+      // 如果提供了筛选指标，则只使用筛选后的指标
+      if (filteredThirdIndicators && filteredThirdIndicators.length > 0) {
+        filteredThirdIndicators.forEach(indicatorName => {
+          // 通过指标中文名称找到对应的属性名
+          const propertyName = indicatorStructure.indicatorPropertyMap?.[indicatorName];
+          if (propertyName) {
+            indicatorArray.push((ip.indicators as Record<string, number>)[propertyName] || 0);
+          } else {
+            console.warn(`找不到指标 "${indicatorName}" 对应的属性名`);
+            indicatorArray.push(0);
+          }
         });
       } else {
-        // 兜底方案：如果没有属性映射，直接使用对象值
-        indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
+        // 如果没有筛选指标，使用全部指标（兜底方案）
+        if (indicatorStructure.allProperties && indicatorStructure.allProperties.length > 0) {
+          // 按照系统定义的属性顺序生成数组
+          indicatorStructure.allProperties.forEach(property => {
+            indicatorArray.push((ip.indicators as Record<string, number>)[property] || 0);
+          });
+        } else {
+          // 兜底方案：如果没有属性映射，直接使用对象值
+          indicatorArray.push(...Object.values(ip.indicators as Record<string, number>));
+        }
       }
       
       return { ...ip, indicators: indicatorArray } as MLIPData;
@@ -336,7 +365,8 @@ export class DataService {
     try {
       const response = await pythonMLApi.generateAdvancedPlot('clustering_with_hull', {
         clustering_results: data.clustering_results,
-        convex_hulls: data.convex_hulls
+        convex_hulls: data.convex_hulls,
+        pca_info: data.pca_info || {}  // 传递PCA信息
       });
       
       if (response.success) {

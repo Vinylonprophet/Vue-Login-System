@@ -317,7 +317,7 @@
 
     <!-- AI分析聊天窗口 -->
     <div v-if="showAIDialog" class="ai-chat-window" :class="{ 'ai-minimized': isAIMinimized }">
-      <div class="ai-chat-header" @mousedown="startDrag">
+      <div class="ai-chat-header">
         <div class="ai-chat-title">
           <span class="ai-icon">🤖</span>
           <h3>AI智能分析助手</h3>
@@ -1321,10 +1321,6 @@ const userInput = ref('');
 const aiInput = ref<HTMLInputElement>();
 const chatMessages = ref<HTMLElement>();
 
-// 拖拽相关
-const isDragging = ref(false);
-const dragOffset = ref({ x: 0, y: 0 });
-
 const formatAIMessage = (message: string) => {
   if (!message) return '';
   
@@ -1485,38 +1481,6 @@ const performAIAnalysis = async (customPrompt?: string) => {
   } finally {
     aiAnalysisLoading.value = false;
   }
-};
-
-const startDrag = (event: MouseEvent) => {
-  isDragging.value = true;
-  const rect = (event.target as HTMLElement).closest('.ai-chat-window')?.getBoundingClientRect();
-  if (rect) {
-    dragOffset.value = {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top
-    };
-  }
-  
-  document.addEventListener('mousemove', handleDrag);
-  document.addEventListener('mouseup', stopDrag);
-};
-
-const handleDrag = (event: MouseEvent) => {
-  if (!isDragging.value) return;
-  
-  const chatWindow = document.querySelector('.ai-chat-window') as HTMLElement;
-  if (chatWindow) {
-    chatWindow.style.left = `${event.clientX - dragOffset.value.x}px`;
-    chatWindow.style.top = `${event.clientY - dragOffset.value.y}px`;
-    chatWindow.style.right = 'auto';
-    chatWindow.style.bottom = 'auto';
-  }
-};
-
-const stopDrag = () => {
-  isDragging.value = false;
-  document.removeEventListener('mousemove', handleDrag);
-  document.removeEventListener('mouseup', stopDrag);
 };
 
 const toggleAIMinimize = () => {
@@ -2922,7 +2886,6 @@ const updateFilteredIndicators = async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  cursor: move;
   user-select: none;
   min-height: 60px;
   box-sizing: border-box;
