@@ -15,7 +15,13 @@ const host = '0.0.0.0';
 
 // 中间件配置
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3001', "http://172.26.0.25:5173"], // 允许前端域名
+  origin: [
+    'http://localhost:5173', 
+    'http://localhost:3001', 
+    'http://172.26.0.25:5173',
+    'http://47.99.173.96',  // 添加公网IP
+    'http://47.99.173.96:80', // 如果需要
+  ],
   credentials: true // 允许发送cookies
 }));
 app.use(express.json({ limit: '10mb' }));
