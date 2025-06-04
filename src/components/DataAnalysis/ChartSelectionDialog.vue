@@ -45,13 +45,34 @@
         <button @click="handleSelectAll" class="btn btn-secondary">
           {{ isAllSelected ? '取消全选' : '全选' }}
         </button>
-        <button 
-          @click="handleConfirm" 
-          class="btn btn-primary"
-          :disabled="selectedCharts.length === 0"
-        >
-          导出PDF ({{ selectedCharts.length }}个图表)
-        </button>
+        <div class="export-buttons">
+          <button 
+            @click="handleExportPDF" 
+            class="btn btn-primary"
+            :disabled="selectedCharts.length === 0"
+          >
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 2v6h6"/>
+              <path d="M16 13H8"/>
+              <path d="M16 17H8"/>
+              <path d="M10 9H8"/>
+            </svg>
+            导出PDF ({{ selectedCharts.length }}个图表)
+          </button>
+          <button 
+            @click="handleExportWord" 
+            class="btn btn-word"
+            :disabled="selectedCharts.length === 0"
+          >
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 2v6h6"/>
+              <path d="M9.5 12l1.5 3 1.5-3 1.5 3"/>
+            </svg>
+            导出Word ({{ selectedCharts.length }}个图表)
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -76,7 +97,8 @@ interface Props {
 
 interface Emits {
   (e: 'close'): void;
-  (e: 'confirm', selectedCharts: string[]): void;
+  (e: 'confirmPDF', selectedCharts: string[]): void;
+  (e: 'confirmWord', selectedCharts: string[]): void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -122,11 +144,18 @@ const handleSelectAll = () => {
   }
 };
 
-const handleConfirm = () => {
+const handleExportPDF = () => {
   if (selectedCharts.value.length === 0) {
     return;
   }
-  emit('confirm', selectedCharts.value);
+  emit('confirmPDF', selectedCharts.value);
+};
+
+const handleExportWord = () => {
+  if (selectedCharts.value.length === 0) {
+    return;
+  }
+  emit('confirmWord', selectedCharts.value);
 };
 </script>
 
@@ -288,14 +317,21 @@ const handleConfirm = () => {
   background: #f8f9fa;
 }
 
+.export-buttons {
+  display: flex;
+  gap: 12px;
+}
+
 .btn {
-  padding: 10px 20px;
+  padding: 10px 16px;
   border: none;
   border-radius: 6px;
-  cursor: pointer;
   font-size: 14px;
-  font-weight: 500;
+  cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
 }
 
 .btn:disabled {
@@ -304,12 +340,12 @@ const handleConfirm = () => {
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: #e9ecef;
+  color: #6c757d;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #5a6268;
+  background: #dee2e6;
 }
 
 .btn-primary {
@@ -319,5 +355,21 @@ const handleConfirm = () => {
 
 .btn-primary:hover:not(:disabled) {
   background: #2980b9;
+}
+
+.btn-word {
+  background: #2980b9;
+  color: white;
+}
+
+.btn-word:hover:not(:disabled) {
+  background: #1f5f8b;
+}
+
+.btn-icon {
+  margin-right: 6px;
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
 }
 </style> 

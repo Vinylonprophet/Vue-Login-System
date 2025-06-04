@@ -14,18 +14,18 @@
           <span>全面分析</span>
         </button>
         <button 
-          @click="$emit('exportPDF')" 
+          @click="$emit('generateReport')" 
           class="header-btn export-btn" 
           :disabled="!hasAnalysisResults"
         >
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <path d="M14 2v6h6"/>
-            <path d="M16 13H8"/>
-            <path d="M16 17H8"/>
-            <path d="M10 9H8"/>
+            <path d="M12 11c1.5 0 2.7 1.2 2.7 2.7S13.5 16.4 12 16.4 9.3 15.2 9.3 13.7 10.5 11 12 11z"/>
+            <path d="M8 17h8"/>
+            <path d="M8 19h8"/>
           </svg>
-          <span>导出PDF</span>
+          <span>生成报告</span>
         </button>
         <button 
           @click="$emit('exportExcel')" 
@@ -55,7 +55,7 @@ defineProps<Props>();
 
 defineEmits<{
   performAnalysis: [];
-  exportPDF: [];
+  generateReport: [];
   exportExcel: [];
 }>();
 </script>

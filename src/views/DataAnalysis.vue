@@ -5,7 +5,7 @@
       :selectedIPsCount="selectedIPs.length"
       :hasAnalysisResults="hasAnalysisResults"
       @performAnalysis="performComprehensiveAnalysis"
-      @exportPDF="exportToPDF"
+      @generateReport="openChartSelectionDialog"
       @exportExcel="exportToExcel"
     />
     
@@ -263,7 +263,8 @@
       :availableCharts="availableCharts"
       :initialSelectedCharts="selectedChartsForExport"
       @close="closeChartSelectionDialog"
-      @confirm="confirmExportPDF"
+      @confirmPDF="confirmExportPDF"
+      @confirmWord="confirmExportWord"
     />
 
     <!-- AI分析聊天窗口 -->
@@ -294,6 +295,7 @@ import { toast } from '../utils/toast';
 // 导入Services
 import { ChartService } from '../services/DataAnalysis/chartService';
 import { ExportService } from '../services/DataAnalysis/exportService';
+import { WordExportService } from '../services/DataAnalysis/wordExportService';
 import { DataService } from '../services/DataAnalysis/dataService';
 
 // 导入Components
@@ -592,32 +594,28 @@ const exportToPDF = async () => {
 };
 
 // 实际的PDF导出逻辑
-const performPDFExport = async (selectedChartIds: string[]) => {
-  try {
-    await ExportService.performPDFExport(
-      selectedChartIds,
-      hasAnalysisResults.value,
-      selectedIPs.value,
-      filteredThirdIndicators.value,
-      chartTabs.value,
-      evaluationResult.value,
-      neuralNetworkResult.value,
-      shapResult.value,
-      pcaResult.value,
-      advancedClusterResult.value,
-      activeChart,
-      isChartAnalysisMode.value,
-      addLog,
-      (loadingValue: boolean) => { loading.value = loadingValue; },
-      (text: string) => { loadingText.value = text; }
-    );
-  } catch (error) {
-    console.error('PDF导出失败:', error);
-    addLog(`❌ PDF导出失败: ${error}`);
-  } finally {
-    loading.value = false;
-    loadingText.value = '';
-  }
+const confirmExportPDF = async (selectedCharts: string[]) => {
+  showChartSelectionDialog.value = false;
+  selectedChartsForExport.value = selectedCharts;
+  
+  // 执行PDF导出
+  await ExportService.performPDFExport(
+    selectedChartsForExport.value,
+    hasAnalysisResults.value,
+    selectedIPs.value,
+    filteredThirdIndicators.value,
+    chartTabs.value,
+    evaluationResult.value,
+    neuralNetworkResult.value,
+    shapResult.value,
+    pcaResult.value,
+    advancedClusterResult.value,
+    activeChart,
+    isChartAnalysisMode.value,
+    addLog,
+    setLoading,
+    setLoadingText
+  );
 };
 
 // Excel导出功能
@@ -941,20 +939,44 @@ const availableCharts = computed(() => [
 
 const availableEnabledCharts = computed(() => availableCharts.value.filter(chart => !chart.disabled));
 
+const openChartSelectionDialog = () => {
+  showChartSelectionDialog.value = true;
+};
+
+const setLoading = (value: boolean) => {
+  loading.value = value;
+};
+
+const setLoadingText = (text: string) => {
+  loadingText.value = text;
+};
+
 const closeChartSelectionDialog = () => {
   showChartSelectionDialog.value = false;
 };
 
-const confirmExportPDF = async () => {
+const confirmExportWord = async (selectedCharts: string[]) => {
   showChartSelectionDialog.value = false;
+  selectedChartsForExport.value = selectedCharts;
   
-  if (selectedChartsForExport.value.length === 0) {
-    toast.warning('请至少选择一个图表导出');
-    return;
-  }
-  
-  // 调用实际的PDF导出逻辑，传入选中的图表
-  await performPDFExport(selectedChartsForExport.value);
+  // 执行Word导出
+  await WordExportService.performWordExport(
+    selectedChartsForExport.value,
+    hasAnalysisResults.value,
+    selectedIPs.value,
+    filteredThirdIndicators.value,
+    chartTabs.value,
+    evaluationResult.value,
+    neuralNetworkResult.value,
+    shapResult.value,
+    pcaResult.value,
+    advancedClusterResult.value,
+    activeChart,
+    isChartAnalysisMode.value,
+    addLog,
+    setLoading,
+    setLoadingText
+  );
 };
 
 // 更新筛选指标
