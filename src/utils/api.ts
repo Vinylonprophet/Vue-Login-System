@@ -382,7 +382,7 @@ export { authApi };
 export const apiClient = authApi;
 
 // Python ML API 基础URL
-const PYTHON_ML_API_BASE = 'http://47.96.60.218:5001/api';
+const PYTHON_ML_API_BASE = 'http://47.99.173.96:5001/api';
 
 // Python ML API 调用函数
 export const pythonMLApi = {
