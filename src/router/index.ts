@@ -60,7 +60,7 @@ router.beforeEach(async (to, _from, next) => {
 
   try {
     // 检查登录状态
-    const response = await fetch('http://localhost:3001/v1/auth/status', {
+    const response = await fetch('/v1/auth/status', {
       method: 'GET',
       credentials: 'include'
     })

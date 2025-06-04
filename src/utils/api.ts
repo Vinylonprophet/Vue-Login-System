@@ -1,5 +1,5 @@
 // API服务配置
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // 通用请求函数
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -382,7 +382,7 @@ export { authApi };
 export const apiClient = authApi;
 
 // Python ML API 基础URL
-const PYTHON_ML_API_BASE = 'http://localhost:5001/api';
+const PYTHON_ML_API_BASE = 'http://47.96.60.218:5001/api';
 
 // Python ML API 调用函数
 export const pythonMLApi = {

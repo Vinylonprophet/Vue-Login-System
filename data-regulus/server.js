@@ -10,8 +10,8 @@ const healthRouter = require('./server/routes/health');
 const authRouter = require('./server/routes/auth');
 
 const app = express();
-const port = process.env.PORT || 3001;
-const host = 'localhost';
+const port = process.env.PORT || 80;
+const host = '0.0.0.0';
 
 // 中间件配置
 app.use(cors({
@@ -21,6 +21,9 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser()); // 解析cookies
+
+// 静态文件服务配置
+app.use(express.static(path.join(__dirname, "dist"))); // 前端打包文件
 app.use(express.static(path.join("data-regulus")))
 app.use(express.static(path.join("card-crawl")))
 app.use(morgan('combined'));
@@ -59,6 +62,20 @@ app.get('/', (req, res) => {
     });
 });
 
+// 前端路由支持 - 必须放在所有API路由之后
+app.get('*', (req, res) => {
+    // 如果请求的是API路径，返回404
+    if (req.path.startsWith('/api/') || req.path.startsWith('/v1/')) {
+        return res.status(404).json({
+            success: false,
+            message: '接口不存在'
+        });
+    }
+    
+    // 对于前端路由，返回index.html让前端路由器处理
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
 app.listen(port, host, async () => {
   await connectToDB();
   console.log(`Server running at http://${host}:${port}`);
@@ -84,10 +101,4 @@ app.use((err, req, res, next) => {
     });
 });
 
-// 404处理
-app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        message: '接口不存在'
-    });
-});
+
