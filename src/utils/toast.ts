@@ -117,8 +117,8 @@ export class ToastManager {
     const {
       successMessage,
       errorMessage,
-      minDelay = 100, // 默认最小10秒
-      maxDelay = 200   // 默认最大20秒
+      minDelay = 10000, // 默认最小10秒
+      maxDelay = 20000   // 默认最大20秒
     } = options
 
     try {
