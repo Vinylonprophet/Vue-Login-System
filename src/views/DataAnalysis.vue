@@ -86,9 +86,9 @@
           
         <!-- 分组筛选 -->
         <div class="group-filter-section">
-          <label>筛选组别:</label>
+          <label>筛选发源地:</label>
           <select v-model="ipGroupFilter" @change="updateFilteredIPs">
-            <option value="全部">全部组别</option>
+            <option value="全部">全部发源地</option>
             <option v-for="group in availableGroups" :key="group" :value="group">{{ group }}</option>
           </select>
             </div>
@@ -96,7 +96,7 @@
         <!-- 选择操作 -->
         <div class="selection-controls">
           <button @click="selectAllFilteredIPs" class="btn btn-sm btn-primary">
-            {{ ipGroupFilter === '全部' ? '全选' : `选择${ipGroupFilter}组` }}
+            {{ ipGroupFilter === '全部' ? '全选' : `选择${ipGroupFilter}发源地` }}
           </button>
           <button @click="clearSelection" class="btn btn-sm btn-secondary">清空</button>
         </div>
@@ -576,7 +576,7 @@ const clearSelection = () => {
 
 const updateFilteredIPs = () => {
   filteredIPs.value = DataService.updateFilteredIPs(ips.value, ipGroupFilter.value);
-  addLog(`筛选组别: ${ipGroupFilter.value}, 显示${filteredIPs.value.length}个IP`);
+  addLog(`筛选发源地: ${ipGroupFilter.value}, 显示${filteredIPs.value.length}个IP`);
 };
 
 // PDF导出功能 - 显示图表选择弹窗

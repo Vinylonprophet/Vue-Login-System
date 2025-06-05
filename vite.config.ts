@@ -5,6 +5,7 @@ import UnoCSS from '@unocss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue(), UnoCSS()],
+  assetsInclude: ['**/*.xlsx', '**/*.xls'],
   build: {
     outDir: 'dist',
     assetsDir: 'assets',

@@ -5,6 +5,14 @@
       <div class="header-top">
         <h1>少数民族民俗体育IP数据管理</h1>
         <div class="header-actions">
+          <button @click="downloadTemplate" class="header-btn template-btn">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <path d="M17 8l-5 5-5-5"/>
+              <path d="M12 13V3"/>
+            </svg>
+            <span>模板下载</span>
+          </button>
           <button @click="importData" class="header-btn import-btn">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -49,7 +57,7 @@
           <div class="stat-item">
             <div class="stat-icon">🏷️</div>
             <div class="stat-content">
-              <span class="stat-label">组别数量</span>
+              <span class="stat-label">发源地数量</span>
               <span class="stat-value">{{ statistics.totalGroups }}</span>
             </div>
           </div>
@@ -71,7 +79,7 @@
           <div class="ip-management-section">
             <h3>IP管理</h3>
             <div class="group-filter">
-              <label>筛选组别:</label>
+              <label>筛选发源地:</label>
               <select v-model="selectedGroup" @change="loadIPs">
                 <option v-for="group in groups" :key="group" :value="group">{{ group }}</option>
               </select>
@@ -92,7 +100,7 @@
                   </div>
                 </div>
                 <div class="ip-details">
-                  <div class="ip-group">组别: {{ ip.group_name }}</div>
+                  <div class="ip-group">发源地: {{ ip.group_name }}</div>
                   <div class="ip-expert">专家: {{ ip.expert }}</div>
                   <div class="ip-stats" v-if="ip.expertCount">
                     <el-icon><User /></el-icon>
@@ -124,8 +132,8 @@
                 <input v-model="ipForm.project_name" type="text" placeholder="请输入IP名称" />
               </div>
               <div class="form-group">
-                <label>组别:</label>
-                <input v-model="ipForm.group_name" type="text" placeholder="请输入组别" />
+                <label>发源地:</label>
+                <input v-model="ipForm.group_name" type="text" placeholder="请输入发源地" />
               </div>
               <div class="form-group">
                 <label>专家:</label>
@@ -170,6 +178,8 @@
                   min="0"
                   max="100"
                   placeholder="请输入评分"
+                  @input="validateIndicatorValue(indicator, $event)"
+                  @blur="validateIndicatorValue(indicator, $event)"
                 />
               </div>
             </div>
@@ -259,6 +269,8 @@ import { toast } from '../utils/toast';
 // 导入中国地址数据
 // @ts-ignore
 import chinaAreaData from 'china-area-data';
+// 导入Excel模板文件
+import templateFile from '../assets/导入模板.xlsx';
 
 // IP评估相关接口扩展
 interface IPWithScore extends IP {
@@ -382,32 +394,6 @@ const transformAreaData = () => {
   return result;
 };
 
-// 地址相关数据
-const availableProvinces = ref<string[]>([
-  '北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', 
-  '黑龙江', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南', 
-  '湖北', '湖南', '广东', '海南', '四川', '贵州', '云南', '陕西', 
-  '甘肃', '青海', '新疆', '广西', '内蒙古', '宁夏', '西藏', '香港', '澳门'
-]);
-
-const availableCities = ref<string[]>([]);
-const availableDistricts = ref<string[]>([]);
-
-// 省市区数据映射
-const provinceToCity: Record<string, string[]> = {
-  '西藏': ['拉萨市', '昌都市', '山南市', '日喀则市', '那曲市', '阿里地区', '林芝市'],
-  '江苏': ['南京市', '无锡市', '徐州市', '常州市', '苏州市', '南通市', '连云港市', '淮安市', '盐城市', '扬州市', '镇江市', '泰州市', '宿迁市'],
-  '广东': ['广州市', '深圳市', '珠海市', '汕头市', '佛山市', '韶关市', '湛江市', '肇庆市', '江门市', '茂名市', '惠州市', '梅州市', '汕尾市', '河源市', '阳江市', '清远市', '东莞市', '中山市', '潮州市', '揭阳市', '云浮市'],
-  '北京': ['东城区', '西城区', '朝阳区', '丰台区', '石景山区', '海淀区', '门头沟区', '房山区', '通州区', '顺义区', '昌平区', '大兴区', '怀柔区', '平谷区', '密云区', '延庆区'],
-  '上海': ['黄浦区', '徐汇区', '长宁区', '静安区', '普陀区', '虹口区', '杨浦区', '闵行区', '宝山区', '嘉定区', '浦东新区', '金山区', '松江区', '青浦区', '奉贤区', '崇明区']
-};
-
-const cityToDistrict: Record<string, string[]> = {
-  '拉萨市': ['城关区', '堆龙德庆区', '达孜区', '林周县', '当雄县', '尼木县', '曲水县', '墨竹工卡县'],
-  '南京市': ['玄武区', '秦淮区', '建邺区', '鼓楼区', '浦口区', '栖霞区', '雨花台区', '江宁区', '六合区', '溧水区', '高淳区'],
-  '苏州市': ['虎丘区', '吴中区', '相城区', '姑苏区', '吴江区', '常熟市', '张家港市', '昆山市', '太仓市'],
-  '广州市': ['荔湾区', '越秀区', '海珠区', '天河区', '白云区', '黄埔区', '番禺区', '花都区', '南沙区', '从化区', '增城区']
-};
 
 // 多专家评分相关状态
 const selectedIPForExperts = ref<{ project_name: string; group_name: string } | null>(null);
@@ -519,7 +505,7 @@ const loadGroups = async () => {
       groups.value = response.data;
     }
   } catch (error) {
-    console.error('加载组别失败:', error);
+    console.error('加载发源地失败:', error);
   }
 };
 
@@ -546,7 +532,7 @@ const loadStatistics = async () => {
 
 const saveIP = async () => {
   if (!ipForm.project_name.trim() || !ipForm.group_name.trim() || !ipForm.expert.trim()) {
-    toast.warning('请填写IP名称、组别和专家姓名');
+    toast.warning('请填写IP名称、发源地和专家姓名');
     return;
   }
   
@@ -585,13 +571,13 @@ const saveIP = async () => {
       // 真正的编辑模式：更新现有IP
       loadingText.value = '更新IP中...';
       await ipApi.updateIP(editingIPId.value!, ipData);
-      addLog(`已更新IP: ${ipData.project_name} (组别: ${ipData.group_name}, 专家: ${ipData.expert}, 地址: ${ipData.full_address})`);
+      addLog(`已更新IP: ${ipData.project_name} (发源地: ${ipData.group_name}, 专家: ${ipData.expert}, 地址: ${ipData.full_address})`);
       toast.success(`IP "${ipData.project_name}" 更新成功！`);
     } else {
       // 创建模式：添加新IP
       loadingText.value = '保存IP中...';
       await ipApi.addIP(ipData);
-      addLog(`已添加IP: ${ipData.project_name} (组别: ${ipData.group_name}, 专家: ${ipData.expert}, 地址: ${ipData.full_address})`);
+      addLog(`已添加IP: ${ipData.project_name} (发源地: ${ipData.group_name}, 专家: ${ipData.expert}, 地址: ${ipData.full_address})`);
       toast.success(`IP "${ipData.project_name}" 保存成功！`);
     }
     
@@ -835,7 +821,7 @@ const importData = async () => {
           const { data } = response;
           
           addLog(`=== Excel导入成功 ===`);
-          addLog(`组别: ${data.summary.groupName}`);
+          addLog(`发源地: ${data.summary.groupName}`);
           addLog(`专家数量: ${data.summary.expertCount}`);
           addLog(`指标数量: ${data.summary.indicatorCount}`);
           addLog(`成功导入IP数量: ${data.ipsCount}`);
@@ -1123,6 +1109,56 @@ const getPropertyNameForIndicator = (indicator: string): string | null => {
   // 如果映射关系未加载，返回null
   return null;
 };
+
+// 验证指标值输入
+const validateIndicatorValue = (indicator: string, event: Event) => {
+  const target = event.target as HTMLInputElement;
+  let value = parseFloat(target.value);
+  
+  // 如果输入为空或NaN，设为0
+  if (isNaN(value) || target.value === '') {
+    indicatorValues.value[indicator] = 0;
+    return;
+  }
+  
+  // 限制范围在0-100之间
+  if (value < 0) {
+    value = 0;
+    toast.warning('指标评分不能小于0');
+  } else if (value > 100) {
+    value = 100;
+    toast.warning('指标评分不能大于100');
+  }
+  
+  // 保留一位小数
+  value = Math.round(value * 10) / 10;
+  
+  // 更新值
+  indicatorValues.value[indicator] = value;
+  target.value = value.toString();
+};
+
+// 下载Excel模板
+const downloadTemplate = () => {
+  try {
+    // 创建下载链接，使用import的模板文件URL
+    const link = document.createElement('a');
+    link.href = templateFile;
+    link.download = '导入模板.xlsx';
+    
+    // 触发下载
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    addLog('Excel导入模板下载完成');
+    toast.success('模板下载成功！请按照模板格式填写数据');
+  } catch (error) {
+    console.error('下载模板失败:', error);
+    toast.fail('下载模板失败');
+    addLog(`下载模板失败: ${error}`);
+  }
+};
 </script>
 
 <style scoped>
@@ -1179,6 +1215,15 @@ const getPropertyNameForIndicator = (indicator: string): string | null => {
 .header-btn:active {
   transform: translateY(0);
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.header-btn.template-btn {
+  background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
+  color: white;
+}
+
+.header-btn.template-btn:hover {
+  background: linear-gradient(135deg, #5a32a3 0%, #4c2a92 100%);
 }
 
 .header-btn.import-btn {
