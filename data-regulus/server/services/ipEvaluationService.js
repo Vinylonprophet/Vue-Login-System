@@ -1,8 +1,12 @@
 // IP评估服务 - 核心算法和数据处理
 const math = require('ml-matrix');
+const fs = require('fs');
+const path = require('path');
 
 class IPEvaluationService {
     constructor() {
+        // 加载权重配置
+        this.loadWeightConfiguration();
         // 指标层级定义
         this.firstLevel = ["文化价值", "市场潜力", "社会效益", "创新性"];
         this.secondLevel = [
@@ -83,6 +87,85 @@ class IPEvaluationService {
 
         // 所有属性名列表
         this.allProperties = Object.values(this.indicatorPropertyMap);
+    }
+
+    // 加载权重配置
+    loadWeightConfiguration() {
+        try {
+            const configPath = path.join(__dirname, '../../config/indicator_weights.json');
+            if (fs.existsSync(configPath)) {
+                const configData = fs.readFileSync(configPath, 'utf8');
+                this.weightConfig = JSON.parse(configData);
+                console.log('✅ 权重配置加载成功');
+                
+                // 验证权重总和
+                this.validateWeightConfiguration();
+            } else {
+                console.warn('⚠️ 权重配置文件不存在，使用默认等权重');
+                this.weightConfig = null;
+            }
+        } catch (error) {
+            console.error('❌ 加载权重配置失败:', error);
+            this.weightConfig = null;
+        }
+    }
+
+    // 验证权重配置
+    validateWeightConfiguration() {
+        if (!this.weightConfig || !this.weightConfig.weights) return false;
+        
+        let totalPercentage = 0;
+        const weights = this.weightConfig.weights;
+        
+        // 计算所有权重的总和
+        Object.values(weights).forEach(category => {
+            Object.values(category).forEach(indicator => {
+                if (indicator.percentage) {
+                    totalPercentage += indicator.percentage;
+                }
+            });
+        });
+        
+        const isValid = Math.abs(totalPercentage - 100.0) < 0.01;
+        console.log(`权重验证: 总计 ${totalPercentage.toFixed(2)}%, 有效性: ${isValid ? '✅' : '❌'}`);
+        
+        return isValid;
+    }
+
+    // 获取自定义权重数组
+    getCustomWeights(selectedIndicators = null) {
+        if (!this.weightConfig) return null;
+        
+        const indicators = selectedIndicators || this.allThird;
+        const weights = [];
+        
+        // 按照指标顺序获取对应的权重
+        indicators.forEach(indicator => {
+            const propertyName = this.indicatorPropertyMap[indicator];
+            let weight = null;
+            
+            // 在配置中查找对应的权重
+            Object.values(this.weightConfig.weights).forEach(category => {
+                if (category[propertyName]) {
+                    weight = category[propertyName].percentage / 100.0; // 转换为小数
+                }
+            });
+            
+            if (weight !== null) {
+                weights.push(weight);
+            } else {
+                console.warn(`⚠️ 未找到指标 "${indicator}" 的权重配置，使用默认权重`);
+                weights.push(1.0 / indicators.length); // 使用平均权重作为备用
+            }
+        });
+        
+        // 确保权重数组归一化
+        const sum = weights.reduce((a, b) => a + b, 0);
+        if (sum > 0) {
+            return weights.map(w => w / sum);
+        }
+        
+        return null;
     }
 
     // AHP权重计算
@@ -168,10 +251,18 @@ class IPEvaluationService {
             }
         });
 
-        // 计算AHP权重（使用单位矩阵作为默认判断矩阵）
-        const dim = data[0].length;
-        const defaultMatrix = Array(dim).fill().map(() => Array(dim).fill(1));
-        const weights = this.calculateAHPWeights(defaultMatrix);
+        // 尝试获取自定义权重，如果没有则使用AHP权重计算
+        let weights = this.getCustomWeights(currentIndicators);
+        
+        if (!weights) {
+            // 使用AHP权重计算（使用单位矩阵作为默认判断矩阵）
+            const dim = data[0].length;
+            const defaultMatrix = Array(dim).fill().map(() => Array(dim).fill(1));
+            weights = this.calculateAHPWeights(defaultMatrix);
+            console.log('⚠️ 使用默认AHP权重计算方法');
+        } else {
+            console.log('✅ 使用自定义权重配置');
+        }
 
         // 计算综合评分
         const scores = data.map(individual => 

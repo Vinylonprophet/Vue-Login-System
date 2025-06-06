@@ -1,0 +1,190 @@
+{
+  "version": "1.0",
+  "description": "IP评估指标权重配置 - 32个指标权重百分比设置",
+  "last_updated": "2024-12-19",
+  "total_indicators": 32,
+  "weights": {
+    "文化价值类": {
+      "historicalOrigin": {
+        "name": "历史渊源",
+        "percentage": 1.42,
+        "description": "项目的历史悠久程度和文化底蕴"
+      },
+      "culturalSymbolism": {
+        "name": "文化象征性",
+        "percentage": 2.18,
+        "description": "项目作为文化符号的意义和价值"
+      },
+      "ethnicMemory": {
+        "name": "民族记忆",
+        "percentage": 1.27,
+        "description": "项目承载的民族集体记忆"
+      },
+      "uniqueness": {
+        "name": "独特性",
+        "percentage": 1.45,
+        "description": "项目相对于其他项目的独特性"
+      },
+      "interEthnicCulturalConnection": {
+        "name": "跨民族文化联系",
+        "percentage": 1.47,
+        "description": "项目连接不同民族文化的能力"
+      },
+      "interEthnicCulturalIdentity": {
+        "name": "跨民族文化认同",
+        "percentage": 2.66,
+        "description": "项目获得跨民族认同的程度"
+      }
+    },
+    "传播影响类": {
+      "communicationChannels": {
+        "name": "传播渠道",
+        "percentage": 1.45,
+        "description": "项目传播渠道的多样性和有效性"
+      },
+      "mediaAttention": {
+        "name": "媒体关注度",
+        "percentage": 1.39,
+        "description": "项目获得媒体关注的程度"
+      },
+      "crossPlatformCommunication": {
+        "name": "跨平台传播",
+        "percentage": 1.03,
+        "description": "项目在不同平台的传播效果"
+      },
+      "socialAttention": {
+        "name": "社会关注度",
+        "percentage": 2.65,
+        "description": "项目获得社会关注的程度"
+      },
+      "publicParticipation": {
+        "name": "民众参与度",
+        "percentage": 2.66,
+        "description": "公众参与项目的积极性"
+      },
+      "governmentSupport": {
+        "name": "政府支持度",
+        "percentage": 2.76,
+        "description": "政府对项目的支持力度"
+      }
+    },
+    "市场潜力类": {
+      "consumerDemand": {
+        "name": "消费者需求",
+        "percentage": 2.55,
+        "description": "消费者对项目的需求程度"
+      },
+      "marketMaturity": {
+        "name": "市场成熟度",
+        "percentage": 1.68,
+        "description": "项目相关市场的成熟程度"
+      },
+      "marketGrowthPotential": {
+        "name": "市场增长潜力",
+        "percentage": 3.19,
+        "description": "项目市场的增长潜力"
+      },
+      "competitorCount": {
+        "name": "竞争者数量",
+        "percentage": 2.37,
+        "description": "项目面临的竞争者数量"
+      },
+      "competitorInnovationCapability": {
+        "name": "竞争者创新能力",
+        "percentage": 4.63,
+        "description": "竞争者的创新能力水平"
+      },
+      "competitiveBarriers": {
+        "name": "竞争壁垒",
+        "percentage": 2.38,
+        "description": "项目构建的竞争壁垒"
+      },
+      "businessModelDiversity": {
+        "name": "商业模式多样性",
+        "percentage": 1.35,
+        "description": "项目商业模式的多样化程度"
+      },
+      "brandValue": {
+        "name": "品牌价值",
+        "percentage": 1.69,
+        "description": "项目的品牌价值和影响力"
+      },
+      "cooperationOpportunities": {
+        "name": "合作机会",
+        "percentage": 2.34,
+        "description": "项目的合作发展机会"
+      }
+    },
+    "社会效益类": {
+      "ethnicCulturalHeritage": {
+        "name": "民族文化传承",
+        "percentage": 4.87,
+        "description": "项目对民族文化传承的贡献"
+      },
+      "ethnicCulturalIntegration": {
+        "name": "民族文化融合",
+        "percentage": 4.15,
+        "description": "项目促进民族文化融合的作用"
+      },
+      "ethnicPride": {
+        "name": "民族自豪感",
+        "percentage": 10.35,
+        "description": "项目增强民族自豪感的程度"
+      },
+      "educationalSignificance": {
+        "name": "教育意义",
+        "percentage": 6.37,
+        "description": "项目的教育价值和意义"
+      },
+      "socialHarmony": {
+        "name": "社会和谐",
+        "percentage": 4.61,
+        "description": "项目促进社会和谐的作用"
+      }
+    },
+    "创新性类": {
+      "ruleInnovation": {
+        "name": "规则创新",
+        "percentage": 3.23,
+        "description": "项目在规则方面的创新"
+      },
+      "venueEquipmentInnovation": {
+        "name": "场地设备创新",
+        "percentage": 5.4,
+        "description": "项目在场地设备方面的创新"
+      },
+      "commercializationInnovation": {
+        "name": "商业化创新",
+        "percentage": 3.54,
+        "description": "项目在商业化方面的创新"
+      },
+      "crossSectorCooperationInnovation": {
+        "name": "跨界合作创新",
+        "percentage": 3.53,
+        "description": "项目在跨界合作方面的创新"
+      },
+      "mediaCommunicationInnovation": {
+        "name": "媒体传播创新",
+        "percentage": 3.15,
+        "description": "项目在媒体传播方面的创新"
+      },
+      "socialPlatformInnovation": {
+        "name": "社交平台创新",
+        "percentage": 6.31,
+        "description": "项目在社交平台方面的创新"
+      }
+    }
+  },
+  "weight_validation": {
+    "total_percentage": 100.0,
+    "current_total": 100.0,
+    "is_valid": true
+  },
+  "usage_notes": [
+    "权重总和必须等于100%",
+    "修改权重后需要重启服务器",
+    "建议根据实际需求调整各指标权重",
+    "文化价值类和社会效益类通常权重较高",
+    "创新性类权重可根据政策导向调整"
+  ]
+} 

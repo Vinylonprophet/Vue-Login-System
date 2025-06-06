@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const { connectToDB } = require('./server/utils/database');
 const morgan = require('morgan');
 const ipRoutes = require('./server/routes/ipRoutes');
+const weightRoutes = require('./server/routes/weightRoutes');
 
 const healthRouter = require('./server/routes/health');
 const authRouter = require('./server/routes/auth');
@@ -38,6 +39,7 @@ app.use(morgan('combined'));
 app.use('/', healthRouter);
 app.use('/v1/auth', authRouter); // 身份验证路由
 app.use('/api/ip', ipRoutes);
+app.use('/api', weightRoutes); // 权重管理路由
 
 app.get('/data-dominus/*', (req, res) => {
   res.sendFile(path.join(__dirname, 'data-dominus', 'index.html'));

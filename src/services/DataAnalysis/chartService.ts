@@ -105,10 +105,11 @@ export class ChartService {
     
     const indexedWeights = weights.map((weight, index) => ({ weight, index }));
     indexedWeights.sort((a, b) => b.weight - a.weight);
-    const topIndicators = indexedWeights.slice(0, 8);
+    // 显示所有指标，不再限制数量
+    const allIndicators = indexedWeights;
     
-    const radarLabels = topIndicators.map(item => indicators[item.index] || `指标${item.index + 1}`);
-    const radarWeights = topIndicators.map(item => item.weight * 100);
+    const radarLabels = allIndicators.map(item => indicators[item.index] || `指标${item.index + 1}`);
+    const radarWeights = allIndicators.map(item => item.weight * 100);
     
     new Chart(ctx, {
       type: 'radar',
@@ -130,13 +131,46 @@ export class ChartService {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          title: { display: true, text: '关键指标权重分布' }
+          title: { 
+            display: true, 
+            text: `所有指标权重分布 (共${radarLabels.length}个指标)` 
+          },
+          legend: {
+            display: true,
+            position: 'top'
+          }
         },
         scales: {
           r: {
-            angleLines: { display: false },
+            angleLines: { 
+              display: true,
+              color: 'rgba(0, 0, 0, 0.1)'
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.1)'
+            },
+            pointLabels: {
+              font: {
+                size: radarLabels.length > 20 ? 10 : radarLabels.length > 15 ? 11 : 12
+              },
+              callback: function(label: string) {
+                // 当指标过多时，截断标签长度
+                if (radarLabels.length > 20) {
+                  return label.length > 4 ? label.substring(0, 4) + '...' : label;
+                } else if (radarLabels.length > 15) {
+                  return label.length > 5 ? label.substring(0, 5) + '...' : label;
+                }
+                return label;
+              }
+            },
             suggestedMin: 0,
-            suggestedMax: Math.max(...radarWeights) * 1.2
+            suggestedMax: Math.max(...radarWeights) * 1.2,
+            ticks: {
+              stepSize: Math.max(...radarWeights) / 5,
+              font: {
+                size: 10
+              }
+            }
           }
         }
       }

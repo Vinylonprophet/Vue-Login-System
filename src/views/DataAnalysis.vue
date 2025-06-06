@@ -153,9 +153,9 @@
               </div>
             </div>
           
-          <!-- 重要指标影响雷达图 -->
+          <!-- 所有指标权重雷达图 -->
           <div v-show="activeChart === 'radar'" class="chart-panel">
-            <h3>重要指标影响</h3>
+            <h3>所有指标权重分布</h3>
             <div class="chart">
               <canvas id="radarChart" ref="radarChart" v-if="evaluationResult && evaluationResult.weights.length > 0"></canvas>
               <div v-else class="chart-placeholder">
@@ -412,7 +412,7 @@ const chartTabs = computed(() => [
     title: '指标权重',
     icon: '🎯',
     disabled: !evaluationResult.value || evaluationResult.value.weights.length === 0,
-    count: evaluationResult.value?.weights.length || 0
+    count: filteredThirdIndicators.value.length || evaluationResult.value?.weights.length || 0
   },
   {
     id: 'neural',
@@ -895,10 +895,10 @@ const availableCharts = computed(() => [
   },
   {
     id: 'radar',
-    title: '重要指标影响雷达图',
+    title: '所有指标权重雷达图',
     icon: '🎯',
     disabled: !evaluationResult.value || evaluationResult.value.weights.length === 0,
-    description: '通过雷达图展示各指标的权重分布和重要性'
+    description: '通过雷达图展示所有指标的权重分布和重要性'
   },
   {
     id: 'neural',
